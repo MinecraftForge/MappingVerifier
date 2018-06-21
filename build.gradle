@@ -50,7 +50,6 @@ dependencies {
     compile 'org.ow2.asm:asm:6.2'
     compile 'org.ow2.asm:asm-tree:6.2'
     compile 'net.sf.jopt-simple:jopt-simple:5.0.4'
-    compile 'com.google.code.gson:gson:2.8.5'
 }
 configurations { deployJars }
 uploadArchives {
