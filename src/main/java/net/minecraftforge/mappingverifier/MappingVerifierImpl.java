@@ -92,6 +92,10 @@ public class MappingVerifierImpl
                     MappingVerifier.LOG.warning("Invalid first mapping line: " + first);
                 }
             }
+            else
+            {
+                MappingVerifier.LOG.warning("Invalid map file: No entries");
+            }
 
         }
         catch (IOException e)
@@ -130,7 +134,7 @@ public class MappingVerifierImpl
             boolean failed = false;
             MappingVerifier.LOG.info("Processing: " + map.map(cls.name));
             ClsInfo info = map.getClass(cls.name);
-            failed = cls.fields.values().stream().sorted((o1, o2) -> o1.name.compareTo(o2.name)).map(entry ->
+            failed = cls.fields.values().stream().sequential().sorted((o1, o2) -> o1.name.compareTo(o2.name)).map(entry ->
             {
                 String newName = info.map(entry.name);
 
@@ -160,7 +164,7 @@ public class MappingVerifierImpl
             }).reduce(true, (a, b) -> a && b);
 
 
-            failed |= cls.methods.values().stream().sorted((o1, o2) -> o1.name.equals(o2.name) ? o1.desc.compareTo(o2.desc) : o1.name.compareTo(o2.name)).map(mt ->
+            failed |= cls.methods.values().stream().sequential().sorted((o1, o2) -> o1.name.equals(o2.name) ? o1.desc.compareTo(o2.desc) : o1.name.compareTo(o2.name)).map(mt ->
             {
                 if (mt.name.startsWith("<") || ((mt.access & Opcodes.ACC_STATIC) != 0))
                     return true;

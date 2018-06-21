@@ -55,12 +55,14 @@ public class Mappings
 
     public String mapPackage(String pkg)
     {
-        return po_to_m.getOrDefault(pkg, pkg);
+        int idx = pkg.indexOf('/');
+        return po_to_m.getOrDefault(pkg, idx == -1 || idx != pkg.length() ? pkg : mapPackage(pkg.substring(0, idx + 1)) + pkg.substring(idx + 1));
     }
 
     public String unmapPackage(String pkg)
     {
-        return pm_to_o.getOrDefault(pkg, pkg);
+        int idx = pkg.indexOf('/');
+        return pm_to_o.getOrDefault(pkg, idx == -1 || idx != pkg.length() ? pkg : unmapPackage(pkg.substring(0, idx + 1)) + pkg.substring(idx + 1));
     }
 
     public String map(String cls)
@@ -68,11 +70,8 @@ public class Mappings
         int sub = cls.lastIndexOf('$');
         int idx = cls.lastIndexOf('/');
 
-        if (sub != -1)
-            return co_to_m.computeIfAbsent(cls, k -> map(cls.substring(0, sub)) + '$' + cls.substring(sub + 1));
-        else if (idx != -1)
-            return co_to_m.computeIfAbsent(cls, k -> mapPackage(cls.substring(0, idx + 1)) + cls.substring(idx + 1));
-        return co_to_m.computeIfAbsent(cls, k -> mapPackage("") + cls);
+        String ret = co_to_m.get(cls);
+        return ret != null ? ret : sub != -1 ? map(cls.substring(0, sub)) +  cls.substring(sub) : idx != -1 ? mapPackage(cls.substring(0, idx + 1)) + cls.substring(idx + 1) : cls;
     }
 
     public String unmap(String cls)
@@ -80,11 +79,8 @@ public class Mappings
         int sub = cls.lastIndexOf('$');
         int idx = cls.indexOf('/');
 
-        if (sub != -1)
-            return cm_to_o.computeIfAbsent(cls, k -> unmap(cls.substring(0, sub - 1)) + cls.substring(sub + 1));
-        else if (idx != -1)
-            return cm_to_o.computeIfAbsent(cls, k -> unmapPackage(cls.substring(0, idx)) + cls.substring(idx + 1));
-        return cm_to_o.computeIfAbsent(cls, k -> unmapPackage("") + cls);
+        String ret = cm_to_o.get(cls);
+        return ret != null ? ret : sub != -1 ? unmap(cls.substring(0, sub)) +  cls.substring(sub) : idx != -1 ? unmapPackage(cls.substring(0, idx + 1)) + cls.substring(idx + 1) : cls;
     }
 
     public String mapDesc(String desc)

@@ -101,18 +101,18 @@ public class MappingVerifier
 
                 });
                 MappingVerifier.LOG.addHandler(filehandler);
-                MappingVerifier.LOG.addHandler(new Handler()
-                {
-                    @Override
-                    public void publish(LogRecord record)
-                    {
-                        if (verbose || record.getLevel().intValue() >= Level.WARNING.intValue())
-                            System.out.println(String.format(record.getMessage(), record.getParameters()));
-                    }
-                    @Override public void flush() {}
-                    @Override public void close() throws SecurityException {}
-                });
             }
+            MappingVerifier.LOG.addHandler(new Handler()
+            {
+                @Override
+                public void publish(LogRecord record)
+                {
+                    if (verbose || record.getLevel().intValue() >= Level.WARNING.intValue())
+                        System.out.println(String.format(record.getMessage(), record.getParameters()));
+                }
+                @Override public void flush() {}
+                @Override public void close() throws SecurityException {}
+            });
 
             log(MappingVerifier.VERSION);
             log("Jar:      " + jarFile);
@@ -140,6 +140,6 @@ public class MappingVerifier
 
     private static void log(String line)
     {
-        LOG.info(line);
+        LOG.warning(line);
     }
 }
