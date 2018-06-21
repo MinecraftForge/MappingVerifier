@@ -1,0 +1,112 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        jcenter()
+    }
+    dependencies {
+        classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.1'
+    }
+}
+
+plugins {
+  id 'net.minecrell.licenser' version '0.3'
+}
+
+apply plugin: 'com.github.johnrengelman.shadow'
+apply plugin: 'java'
+apply plugin: 'eclipse'
+apply plugin: 'maven'
+
+group = 'net.minecraftforge'
+version = '1.0'
+targetCompatibility = sourceCompatibility = compileJava.sourceCompatibility = compileJava.targetCompatibility = '1.8'
+
+repositories {
+    mavenCentral()
+}
+
+license {
+  header project.file('LICENSE-header.txt')
+  include '**/*.java'
+  newLine false
+}
+
+jar {
+    manifest.attributes('Main-Class': 'net.minecraftforge.mappingverifier.MappingVerifier')
+    manifest.attributes('Implementation-Version': project.version)
+}
+shadowJar {
+    classifier 'fatjar'
+    manifest.attributes('Main-Class': 'net.minecraftforge.mappingverifier.MappingVerifier')
+    manifest.attributes('Implementation-Version': project.version)
+}
+
+artifacts {
+    archives jar
+    archives shadowJar
+}
+
+dependencies {
+    compile 'org.ow2.asm:asm:6.2'
+    compile 'org.ow2.asm:asm-tree:6.2'
+    compile 'net.sf.jopt-simple:jopt-simple:5.0.4'
+    compile 'com.google.code.gson:gson:2.8.5'
+}
+configurations { deployJars }
+uploadArchives {
+    repositories {
+        add project.repositories.mavenLocal()
+    }
+    repositories.mavenDeployer {
+        configuration = configurations.deployJars
+
+        if (project.hasProperty('mavenPass')) {
+            logger.info('Publishing to files server')
+            repository(url: 'http://files.minecraftforge.net/maven/manage/upload') {
+                authentication(userName: 'forge', password: project.getProperty('mavenPass'))
+            }
+        } else {
+            logger.info('Publishing to repo folder')
+            repository(url: 'file://localhost/' + project.file('repo').getAbsolutePath())
+        }
+
+        pom {
+            groupId = project.group
+            version = project.version
+            artifactId = project.archivesBaseName
+        }
+        pom.project {
+            name project.archivesBaseName
+            packaging 'jar'
+            description 'Verifier for mappings against jar files.'
+            url 'https://github.com/MinecraftForge/MappingVerifier'
+
+            scm {
+                url 'https://github.com/MinecraftForge/MappingVerifier'
+                connection 'scm:git:git://github.com/MinecraftForge/MappingVerifier.git'
+                developerConnection 'scm:git:git@github.com:MinecraftForge/MappingVerifier.git'
+            }
+
+            issueManagement {
+                system 'github'
+                url 'https://github.com/MinecraftForge/MappingVerifier/issues'
+            }
+
+            licenses {
+                license {
+                    name ''
+                    url ''
+                    distribution 'repo'
+                }
+            }
+
+            developers {
+                developer {
+                    id 'LexManos'
+                    name 'Lex Manos'
+                    roles { role 'developer' }
+                }
+            }
+        }
+    }
+}
