@@ -28,10 +28,8 @@ import net.minecraftforge.mappingverifier.InheratanceMap.Class;
 import net.minecraftforge.mappingverifier.InheratanceMap.Node;
 import net.minecraftforge.mappingverifier.Mappings.ClsInfo;
 
-public class OverrideNames implements IVerifier
+public class OverrideNames extends SimpleVerifier
 {
-    public static final OverrideNames INSTANCE = new OverrideNames();
-
     @Override
     public boolean process(InheratanceMap inh, Mappings map)
     {
@@ -40,7 +38,7 @@ public class OverrideNames implements IVerifier
         .reduce(true, (v, cls) ->
         {
             boolean failed = false;
-            MappingVerifier.LOG.info("  Processing: " + map.map(cls.name));
+            Main.LOG.info("  Processing: " + map.map(cls.name));
             ClsInfo info = map.getClass(cls.name);
             failed = cls.fields.values().stream().sequential().sorted((o1, o2) -> o1.name.compareTo(o2.name)).map(entry ->
             {
@@ -62,8 +60,7 @@ public class OverrideNames implements IVerifier
                             map.map(parent.name), newName
                         );
                         */
-                        log("    Shade: %s/%s -- %s", cls.name, entry.name, newName);
-                        log("           %s/%s -- %s", map.map(parent.name), f.name, newName);
+                        error("    Shade: %s/%s %s/%s %s", cls.name, entry.name, map.map(parent.name), f.name, newName);
                         return false;
                     }
                     parent = parent.getParent();
@@ -100,8 +97,7 @@ public class OverrideNames implements IVerifier
                                 map.map(parent.name), newName
                                 );
                             */
-                            log("    Shade: %s/%s %s -- %s", cls.name, mt.name, mt.desc, newName);
-                            log("           %s/%s %s -- %s", parent.name, unmapped, mt.desc, newName);
+                            error("    Shade: %s/%s %s/%s %s %s", cls.name, mt.name, parent.name, unmapped, mt.desc, newName);
                             return false;
                         }
                     }
@@ -119,7 +115,7 @@ public class OverrideNames implements IVerifier
                                 map.map(parent.name), mapped
                             );
                             */
-                            log("    Override: %s/%s %s -- %s -> %s", cls.name, mt.name, mt.desc, newName, mapped);
+                            error("    Override: %s/%s %s -- %s -> %s", cls.name, mt.name, mt.desc, newName, mapped);
                             return false;
                         }
                     }
@@ -130,10 +126,5 @@ public class OverrideNames implements IVerifier
 
             return failed;
         }, (a,b) -> a && b).booleanValue();
-    }
-
-    private void log(String format, String... args)
-    {
-        MappingVerifier.LOG.warning(String.format(format, (Object[])args));
     }
 }

@@ -18,17 +18,23 @@
  */
 package net.minecraftforge.mappingverifier;
 
+import java.util.ArrayList;
 import java.util.List;
 
-public interface IVerifier
+public abstract class SimpleVerifier implements IVerifier
 {
-    default String getName()
+    private List<String> errors = new ArrayList<>();
+
+    @Override
+    public List<String> getErrors()
     {
-        return this.getClass().getSimpleName();
+        return errors;
     }
 
-    public List<String> getErrors();
-
-    boolean process(InheratanceMap inheratance, Mappings mappings);
-
+    protected void error(String format, String... args)
+    {
+        String line = String.format(format, (Object[])args);
+        Main.LOG.warning(line);
+        errors.add(line);
+    }
 }

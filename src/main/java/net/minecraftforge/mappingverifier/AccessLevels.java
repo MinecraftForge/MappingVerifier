@@ -33,10 +33,8 @@ import org.objectweb.asm.tree.TypeInsnNode;
 import net.minecraftforge.mappingverifier.InheratanceMap.Class;
 import net.minecraftforge.mappingverifier.InheratanceMap.Node;
 
-public class AccessLevels implements IVerifier
+public class AccessLevels extends SimpleVerifier
 {
-    public static final AccessLevels INSTANCE = new AccessLevels();
-
     @Override
     public boolean process(InheratanceMap inh, Mappings map)
     {
@@ -44,7 +42,7 @@ public class AccessLevels implements IVerifier
         .sorted((o1, o2) -> o1.name.compareTo(o2.name))
         .reduce(true, (v, cls) ->
         {
-            MappingVerifier.LOG.info("  Processing: " + map.map(cls.name));
+            Main.LOG.info("  Processing: " + map.map(cls.name));
             ClassNode node = inh.getNode(cls.name);
 
             if (node == null)
@@ -154,11 +152,6 @@ public class AccessLevels implements IVerifier
         }, (a,b) -> a && b).booleanValue();
     }
 
-    private void log(String format, String... args)
-    {
-        MappingVerifier.LOG.warning(String.format(format, (Object[])args));
-    }
-
     private String packageName(String clsName)
     {
         int idx = clsName.lastIndexOf('/');
@@ -180,7 +173,7 @@ public class AccessLevels implements IVerifier
             if (!isPackage && !isSubclass)
             {
                 warned.add(key);
-                log("    Invalid Access: %s -> %s PROTECTED", source, target);
+                error("    Invalid Access: %s -> %s PROTECTED", source, target);
                 return false;
             }
         }
@@ -189,7 +182,7 @@ public class AccessLevels implements IVerifier
             if (!isSelf)
             {
                 warned.add(key);
-                log("    Invalid Access: %s -> %s PRIVATE", source, target);
+                error("    Invalid Access: %s -> %s PRIVATE", source, target);
                 return false;
             }
         }
@@ -198,7 +191,7 @@ public class AccessLevels implements IVerifier
             if (!isSelf && !isPackage)
             {
                 warned.add(key);
-                log("    Invalid Access: %s -> %s DEFAULT", source, target);
+                error("    Invalid Access: %s -> %s DEFAULT", source, target);
                 return false;
             }
         }

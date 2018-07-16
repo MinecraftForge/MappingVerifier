@@ -32,12 +32,12 @@ license {
 }
 
 jar {
-    manifest.attributes('Main-Class': 'net.minecraftforge.mappingverifier.MappingVerifier')
+    manifest.attributes('Main-Class': 'net.minecraftforge.mappingverifier.Main')
     manifest.attributes('Implementation-Version': project.version)
 }
 shadowJar {
     classifier 'fatjar'
-    manifest.attributes('Main-Class': 'net.minecraftforge.mappingverifier.MappingVerifier')
+    manifest.attributes('Main-Class': 'net.minecraftforge.mappingverifier.Main')
     manifest.attributes('Implementation-Version': project.version)
 }
 
