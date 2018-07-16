@@ -72,7 +72,7 @@ public class MappingVerifier
         for (IVerifier v : tasks)
         {
             Main.LOG.warning("Task: " + v.getName());
-            valid &= !v.process(inh, map);
+            valid &= v.process(inh, map);
         }
         return valid;
     }

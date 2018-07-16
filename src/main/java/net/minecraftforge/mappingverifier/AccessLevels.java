@@ -40,13 +40,14 @@ public class AccessLevels extends SimpleVerifier
     {
         return inh.getRead()
         .sorted((o1, o2) -> o1.name.compareTo(o2.name))
-        .reduce(true, (v, cls) ->
+        .map(cls ->
         {
             Main.LOG.info("  Processing: " + map.map(cls.name));
             ClassNode node = inh.getNode(cls.name);
 
             if (node == null)
             {
+                error("  Missing node: " + cls.name);
                 return false; //Does this ever happen?
             }
 
@@ -54,9 +55,9 @@ public class AccessLevels extends SimpleVerifier
 
             String newCls = map.map(cls.name);
             String pkg = packageName(newCls);
-            boolean failed = node.methods.stream().sequential().sorted((o1, o2) -> o1.name.equals(o2.name) ? o1.desc.compareTo(o2.desc) : o1.name.compareTo(o2.name)).map(mt ->
+            boolean success = node.methods.stream().sequential().sorted((o1, o2) -> o1.name.equals(o2.name) ? o1.desc.compareTo(o2.desc) : o1.name.compareTo(o2.name)).map(mt ->
             {
-                boolean ret = false;
+                boolean inner_success = true;
 
                 for (AbstractInsnNode isn : mt.instructions.toArray())
                 {
@@ -91,7 +92,7 @@ public class AccessLevels extends SimpleVerifier
                         boolean isPackage = pkg.equals(packageName(newOwner));
                         boolean isSubclass = cls.getStack().contains(target.owner);
 
-                        ret |= !canAccess(newCls, newOwner + "/" + newField, target.access, isPackage, isSubclass, isSelf, warned);
+                        inner_success &= canAccess(newCls, newOwner + "/" + newField, target.access, isPackage, isSubclass, isSelf, warned);
                     }
                     else if (isn instanceof MethodInsnNode)
                     {
@@ -124,7 +125,7 @@ public class AccessLevels extends SimpleVerifier
 
                         boolean isPackage = pkg.equals(packageName(newOwner));
                         boolean isSubclass = cls.getStack().contains(target.owner);
-                        ret |= !canAccess(newCls, newOwner + "/" + newMethod + newDesc, target.access, isPackage, isSubclass, isSelf, warned);
+                        inner_success &= canAccess(newCls, newOwner + "/" + newMethod + newDesc, target.access, isPackage, isSubclass, isSelf, warned);
                     }
                     else if (isn instanceof TypeInsnNode)
                     {
@@ -141,15 +142,15 @@ public class AccessLevels extends SimpleVerifier
                         String newOwner = map.map(obfed);
                         boolean isPackage = pkg.equals(packageName(newOwner));
                         boolean isSubclass = cls.getStack().contains(inh.getClass(obfed));
-                        ret |= !canAccess(newCls, newOwner, owner.getAccess(), isPackage, isSubclass, isSelf, warned);
+                        inner_success &= canAccess(newCls, newOwner, owner.getAccess(), isPackage, isSubclass, isSelf, warned);
                     }
                 }
 
-                return ret;
+                return inner_success;
             }).reduce(true, (a,b) -> a && b);
 
-            return failed;
-        }, (a,b) -> a && b).booleanValue();
+            return success;
+        }).reduce(true, (a,b) -> a && b);
     }
 
     private String packageName(String clsName)
@@ -166,7 +167,7 @@ public class AccessLevels extends SimpleVerifier
 
         if ((access & Opcodes.ACC_PUBLIC) != 0)
         {
-            return false; //Public anyone can access;
+            return true; //Public anyone can access;
         }
         else if ((access & Opcodes.ACC_PROTECTED) != 0)
         {
