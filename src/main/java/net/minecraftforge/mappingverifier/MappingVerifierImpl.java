@@ -29,6 +29,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.zip.ZipFile;
 
+import net.minecraftforge.mappingverifier.Mappings.ClsInfo;
+
 public class MappingVerifierImpl
 {
     private Mappings map = new Mappings();
@@ -90,8 +92,40 @@ public class MappingVerifierImpl
                 }
                 else
                 {
-                    //TSRG/CSRG support?
-                    MappingVerifier.LOG.warning("Invalid first mapping line: " + first);
+                    lines.stream().filter(l -> !l.startsWith("\t")).map(l -> l.split(" ")).filter(l -> l.length == 2).forEach(l -> map.addMapping(l[0], l[1]));
+                    ClsInfo currentCls = null;
+                    for (String line : lines)
+                    {
+                        if (line.startsWith("\t"))
+                        {
+                            if (currentCls == null)
+                            {
+                                MappingVerifier.LOG.warning("Invalid TSRG Line, Missing Current class: " + line);
+                            }
+                            else
+                            {
+                                String[] parts = line.substring(1).split(" ");
+                                if (parts.length == 2)
+                                    currentCls.putField(parts[0], parts[1]);
+                                else if (parts.length == 3)
+                                    currentCls.putMethod(parts[0], parts[1], parts[2], map.mapDesc(parts[1]));
+                                else
+                                    MappingVerifier.LOG.warning("Invalid TSRG Line, To many peices: " + line);
+                            }
+                        }
+                        else
+                        {
+                            String[] parts = line.split(" ");
+                            if (parts.length == 2)
+                                currentCls = map.getClass(parts[0]);
+                            else if (parts.length == 3)
+                                map.getClass(parts[0]).putField(parts[1], parts[2]);
+                            else if (parts.length == 4)
+                                map.getClass(parts[0]).putMethod(parts[1], parts[2], parts[3], map.mapDesc(parts[2]));
+                            else
+                                MappingVerifier.LOG.warning("Invalid CSRG Line, To many peices: " + line);
+                        }
+                    }
                 }
             }
             else
