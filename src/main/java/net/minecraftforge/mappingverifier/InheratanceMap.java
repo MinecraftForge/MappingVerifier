@@ -18,10 +18,6 @@
  */
 package net.minecraftforge.mappingverifier;
 
-import static org.objectweb.asm.ClassReader.SKIP_CODE;
-import static org.objectweb.asm.ClassReader.SKIP_DEBUG;
-import static org.objectweb.asm.ClassReader.SKIP_FRAMES;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayDeque;
@@ -32,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 import org.objectweb.asm.ClassReader;
@@ -44,31 +39,40 @@ import static org.objectweb.asm.Opcodes.*;
 
 public class InheratanceMap
 {
-    private Map<String, Class> classes = new HashMap<String, Class>();
+    private Map<String, Class> classes = new HashMap<>();
+    private Map<String, ClassNode> nodes = new HashMap<>();
 
     public void processClass(InputStream data) throws IOException
     {
         ClassNode node = new ClassNode();
         ClassReader reader = new ClassReader(data);
-        reader.accept(node, SKIP_CODE | SKIP_DEBUG | SKIP_FRAMES);
+        reader.accept(node, 0);
 
         Class cls = getClass(node.name);
         cls.parent = getClass(node.superName);
         cls.wasRead = true;
+        cls.access = node.access;
 
         for (String intf : node.interfaces)
             cls.interfaces.add(getClass(intf));
 
         for (FieldNode n : node.fields)
-            cls.fields.put(n.name + n.desc, new Node(cls, n.name, n.desc, n.access));
+            cls.fields.put(n.name, new Node(cls, n.name, n.desc, n.access));
 
         for (MethodNode n : node.methods)
             cls.methods.put(n.name + n.desc, new Node(cls, n.name, n.desc, n.access));
+
+        this.nodes.put(node.name, node);
     }
 
     public Class getClass(String name)
     {
         return classes.computeIfAbsent(name, k -> new Class(name));
+    }
+
+    public ClassNode getNode(String name)
+    {
+        return nodes.get(name);
     }
 
     public Stream<Class> getRead()
@@ -79,6 +83,7 @@ public class InheratanceMap
     public static class Class
     {
         private boolean wasRead = false;
+        private int access = 0;
         private Class parent;
         public final String name;
         public final Map<String, Node> fields = new HashMap<String, Node>();
@@ -96,6 +101,11 @@ public class InheratanceMap
             return wasRead;
         }
 
+        public int getAccess()
+        {
+            return access;
+        }
+
         public Class getParent()
         {
             return parent;
@@ -105,6 +115,16 @@ public class InheratanceMap
         public String toString()
         {
             return this.name + " [" + fields.size() + ", " + methods.size() + "]";
+        }
+
+        public Node getField(String name)
+        {
+            return fields.get(name);
+        }
+
+        public Node getMethod(String name, String desc)
+        {
+            return methods.get(name + desc);
         }
 
         public List<Class> getStack()
@@ -130,7 +150,7 @@ public class InheratanceMap
                         if (cls.parent != null && !visited.contains(cls.parent.name))
                             q.add(cls.parent);
 
-                        this.interfaces.stream().filter(i -> !visited.contains(i.name)).forEach(q::add);
+                        cls.interfaces.stream().filter(i -> !visited.contains(i.name)).forEach(q::add);
                     }
                 }
             }
@@ -159,6 +179,12 @@ public class InheratanceMap
         public int hashCode()
         {
             return hash;
+        }
+
+        @Override
+        public String toString()
+        {
+            return Access.get(this.access).name() + " " + this.name + this.desc;
         }
     }
     public static enum Access

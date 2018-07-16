@@ -42,7 +42,6 @@ public class MappingVerifier
 
     public static void main(String[] args) throws Exception
     {
-
         OptionParser parser = new OptionParser();
         parser.accepts("help").forHelp();
         parser.accepts("version").forHelp();
