@@ -1,28 +1,28 @@
-buildscript {
-    repositories {
-        mavenCentral()
-        jcenter()
-    }
-    dependencies {
-        classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.1'
-    }
-}
-
 plugins {
   id 'net.minecrell.licenser' version '0.3'
+  id 'org.ajoberstar.grgit' version '2.3.0'
+  id 'com.github.johnrengelman.shadow' version '2.0.4'
 }
 
-apply plugin: 'com.github.johnrengelman.shadow'
 apply plugin: 'java'
 apply plugin: 'eclipse'
 apply plugin: 'maven'
 
 group = 'net.minecraftforge'
-version = '1.0'
+version = gitVersion()
 targetCompatibility = sourceCompatibility = compileJava.sourceCompatibility = compileJava.targetCompatibility = '1.8'
 
 repositories {
     mavenCentral()
+}
+
+def gitVersion() {
+    def desc = grgit.describe(longDescr: true).split('-') as List
+    def hash = desc.remove(desc.size() - 1)
+    def offset = desc.remove(desc.size() - 1)
+    def tag = desc.join('-')
+    def branch = grgit.branch.current().name    
+    return "${tag}.${offset}${t -> if (branch != 'master') t << '-' + branch}"
 }
 
 license {
@@ -60,10 +60,10 @@ uploadArchives {
     repositories.mavenDeployer {
         configuration = configurations.deployJars
 
-        if (project.hasProperty('mavenPass')) {
+        if (project.hasProperty('mavenPassword')) {
             logger.info('Publishing to files server')
             repository(url: 'http://files.minecraftforge.net/maven/manage/upload') {
-                authentication(userName: 'forge', password: project.getProperty('mavenPass'))
+                authentication(userName: 'forge', password: project.getProperty('mavenPassword'))
             }
         } else {
             logger.info('Publishing to repo folder')
@@ -94,8 +94,8 @@ uploadArchives {
 
             licenses {
                 license {
-                    name ''
-                    url ''
+                    name = 'LGPLv2.1'
+                    url = 'https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt'
                     distribution 'repo'
                 }
             }
