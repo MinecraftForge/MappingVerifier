@@ -124,7 +124,17 @@ public class Main
                 mv.addDefaultTasks();
                 mv.loadMap(mapFile);
                 mv.loadJar(jarFile); //TODO: Add full classpath so we can check all classes including JVM?
-                mv.verify();
+                if (!mv.verify())
+                {
+                    for (IVerifier task : mv.getTasks())
+                    {
+                        if (!task.getErrors().isEmpty())
+                        {
+                            log("Task: " + task.getName());
+                            task.getErrors().forEach(l -> log("    " + l));
+                        }
+                    }
+                }
             }
             catch (Exception e)
             {

@@ -71,7 +71,6 @@ public class MappingVerifier
         boolean valid = true;
         for (IVerifier v : tasks)
         {
-            Main.LOG.warning("Task: " + v.getName());
             valid &= v.process(inh, map);
         }
         return valid;

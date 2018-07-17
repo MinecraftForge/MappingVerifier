@@ -42,7 +42,7 @@ public class AccessLevels extends SimpleVerifier
         .sorted((o1, o2) -> o1.name.compareTo(o2.name))
         .map(cls ->
         {
-            Main.LOG.info("  Processing: " + map.map(cls.name));
+            Main.LOG.fine("  Processing: " + map.map(cls.name));
             ClassNode node = inh.getNode(cls.name);
 
             if (node == null)

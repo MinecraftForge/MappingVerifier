@@ -33,8 +33,6 @@ public abstract class SimpleVerifier implements IVerifier
 
     protected void error(String format, String... args)
     {
-        String line = String.format(format, (Object[])args);
-        Main.LOG.warning(line);
-        errors.add(line);
+        errors.add(String.format(format, (Object[])args));
     }
 }
