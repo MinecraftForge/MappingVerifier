@@ -40,7 +40,9 @@ public class OverrideNames extends SimpleVerifier
             boolean success = true;
             Main.LOG.info("  Processing: " + map.map(cls.name));
             ClsInfo info = map.getClass(cls.name);
-            success &= cls.fields.values().stream().sequential().sorted((o1, o2) -> o1.name.compareTo(o2.name)).map(entry ->
+            success &= cls.fields.values().stream().sequential().sorted((o1, o2) -> o1.name.compareTo(o2.name))
+            .filter(field -> (field.access & Opcodes.ACC_STATIC) == 0)
+            .map(entry ->
             {
                 String newName = info.map(entry.name);
 
@@ -69,7 +71,9 @@ public class OverrideNames extends SimpleVerifier
             }).reduce(true, (a, b) -> a && b);
 
 
-            success &= cls.methods.values().stream().sequential().sorted((o1, o2) -> o1.name.equals(o2.name) ? o1.desc.compareTo(o2.desc) : o1.name.compareTo(o2.name)).map(mt ->
+            success &= cls.methods.values().stream().sequential().sorted((o1, o2) -> o1.name.equals(o2.name) ? o1.desc.compareTo(o2.desc) : o1.name.compareTo(o2.name))
+            .filter(mt -> (mt.access & Opcodes.ACC_STATIC) == 0)
+            .map(mt ->
             {
                 if (mt.name.startsWith("<") || ((mt.access & Opcodes.ACC_STATIC) != 0))
                     return true;
