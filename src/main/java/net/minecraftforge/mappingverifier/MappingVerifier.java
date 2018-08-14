@@ -42,6 +42,7 @@ public class MappingVerifier
     {{
         put("accesslevels", AccessLevels::new);
         put("overridenames", OverrideNames::new);
+        put("uniqueids", UniqueIDs::new);
     }};
 
     private Mappings map = new Mappings();
