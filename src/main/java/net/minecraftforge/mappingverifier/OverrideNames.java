@@ -86,9 +86,17 @@ public class OverrideNames extends SimpleVerifier
 
                     Node m = parent.methods.get(unmapped + mt.desc);
 
-                    if (m != null && !Access.isPrivate(m.access))
+                    if (m != null)//Parent has same mapped name
                     {
-                        if (!mt.name.equals(unmapped))
+                        if (Access.isPrivate(m.access))
+                        {
+                            if (newName.startsWith("func_")) //Private with the same name are valid. but if we're in SRG names, we should make it unique to allow separate names to be crowdsourced.
+                            {
+                                error("    BadOverride: %s/%s %s -> %s/%s %s -- %s", cls.name, mt.name, mt.desc, parent.name, unmapped, mt.desc, newName);
+                                return false;
+                            }
+                        }
+                        else if (!mt.name.equals(unmapped)) //Obf name is different, so it's not a proper override, but SRG name matches, so bad shade.
                         {
                             error("    Shade: %s/%s %s/%s %s %s", cls.name, mt.name, parent.name, unmapped, mt.desc, newName);
                             return false;
@@ -96,7 +104,7 @@ public class OverrideNames extends SimpleVerifier
                     }
 
                     m = parent.methods.get(mt.name + mt.desc);
-                    if (m != null && !Access.isPrivate(m.access))
+                    if (m != null && !Access.isPrivate(m.access)) //Parent has same obfed name as child and parent isn't private, make sure they have the same mapped name to maintain the override.
                     {
                         String mapped = pinfo.map(mt.name, mt.desc);
                         if (!newName.equals(mapped))
