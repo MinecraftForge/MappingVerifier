@@ -33,9 +33,16 @@ import net.minecraftforge.mappingverifier.Mappings.ClsInfo;
 
 public class UniqueIDs extends SimpleVerifier
 {
-    @Override
-    public boolean process(InheratanceMap inh, Mappings map)
+    protected UniqueIDs(MappingVerifier verifier)
     {
+        super(verifier);
+    }
+
+    @Override
+    public boolean process()
+    {
+        InheratanceMap inh = verifier.getInheratance();
+        Mappings map = verifier.getMappings();
         Map<Integer, Set<String>> claimed = new HashMap<>();
         Map<String, Set<List<String>>> signatures = new HashMap<>();
 
@@ -63,19 +70,26 @@ public class UniqueIDs extends SimpleVerifier
             .forEach(gather);
         });
 
+        Map<String, List<Integer>> ctrs = verifier.getCtrs();
+        if (ctrs != null)
+        {
+            ctrs.values().stream().flatMap(List::stream).forEach(id -> claimed.computeIfAbsent(id, k -> new HashSet<>()).add(id.toString()));
+        }
+
         return claimed.entrySet().stream().filter(e -> e.getValue().size() > 1 || different(signatures.get(e.getValue().iterator().next()))).sorted((e1, e2) -> e1.getKey().compareTo(e2.getKey())).map(entry ->
         {
             error("Duplicate ID: %s (%s)", entry.getKey().toString(), String.join(", ", entry.getValue()));
             entry.getValue().forEach(name ->
             {
-                error("    %s (%s)", name, signatures.get(name).stream().map(e -> String.join(" ", e)).collect(Collectors.joining(", ")));
+                Set<List<String>> sigs = signatures.get(name);
+                error("    %s (%s)", name, sigs == null ? "null" : sigs.stream().map(e -> String.join(" ", e)).collect(Collectors.joining(", ")));
             });
             return false;
         }).reduce(true, (a,b)-> a && b);
     }
 
     private boolean different(Set<List<String>> entries) {
-        if (entries.size() == 1)
+        if (entries == null || entries.size() == 1)
             return false;
 
         boolean field = false, method = false;

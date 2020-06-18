@@ -35,9 +35,16 @@ import net.minecraftforge.mappingverifier.InheratanceMap.Node;
 
 public class AccessLevels extends SimpleVerifier
 {
-    @Override
-    public boolean process(InheratanceMap inh, Mappings map)
+    protected AccessLevels(MappingVerifier verifier)
     {
+        super(verifier);
+    }
+
+    @Override
+    public boolean process()
+    {
+        InheratanceMap inh = verifier.getInheratance();
+        Mappings map = verifier.getMappings();
         return inh.getRead()
         .sorted((o1, o2) -> o1.name.compareTo(o2.name))
         .map(cls ->

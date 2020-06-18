@@ -32,6 +32,6 @@ public interface IVerifier
     /**
      * @return True if everything went fine, false if something was logged to errors.
      */
-    boolean process(InheratanceMap inheratance, Mappings mappings);
+    boolean process();
 
 }

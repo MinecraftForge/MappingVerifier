@@ -33,9 +33,16 @@ import net.minecraftforge.mappingverifier.Mappings.ClsInfo;
 
 public class OverrideNames extends SimpleVerifier
 {
-    @Override
-    public boolean process(InheratanceMap inh, Mappings map)
+    protected OverrideNames(MappingVerifier verifier)
     {
+        super(verifier);
+    }
+
+    @Override
+    public boolean process()
+    {
+        InheratanceMap inh = verifier.getInheratance();
+        Mappings map = verifier.getMappings();
         return checkNormal(inh, map) && checkInterfaces(inh, map);
     }
 

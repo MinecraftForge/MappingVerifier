@@ -23,7 +23,13 @@ import java.util.List;
 
 public abstract class SimpleVerifier implements IVerifier
 {
+    protected final MappingVerifier verifier;
     private List<String> errors = new ArrayList<>();
+
+    protected SimpleVerifier(MappingVerifier verifier)
+    {
+        this.verifier = verifier;
+    }
 
     @Override
     public List<String> getErrors()
