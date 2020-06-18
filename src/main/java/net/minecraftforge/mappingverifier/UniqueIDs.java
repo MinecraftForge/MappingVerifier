@@ -78,11 +78,11 @@ public class UniqueIDs extends SimpleVerifier
 
         return claimed.entrySet().stream().filter(e -> e.getValue().size() > 1 || different(signatures.get(e.getValue().iterator().next()))).sorted((e1, e2) -> e1.getKey().compareTo(e2.getKey())).map(entry ->
         {
-            error("Duplicate ID: %s (%s)", entry.getKey().toString(), String.join(", ", entry.getValue()));
-            entry.getValue().forEach(name ->
+            error("Duplicate ID: %s (%s)", entry.getKey().toString(), entry.getValue().stream().sorted().collect(Collectors.joining(", ")));
+            entry.getValue().stream().sorted().forEach(name ->
             {
                 Set<List<String>> sigs = signatures.get(name);
-                error("    %s (%s)", name, sigs == null ? "null" : sigs.stream().map(e -> String.join(" ", e)).collect(Collectors.joining(", ")));
+                error("    %s (%s)", name, sigs == null ? "null" : sigs.stream().map(e -> String.join(" ", e)).sorted().collect(Collectors.joining(", ")));
             });
             return false;
         }).reduce(true, (a,b)-> a && b);
