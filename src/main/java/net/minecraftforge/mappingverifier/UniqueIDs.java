@@ -1,6 +1,6 @@
 /*
  * Mapping Verifier
- * Copyright (c) 2016-2018.
+ * Copyright (c) 2016-2020.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -18,6 +18,7 @@
  */
 package net.minecraftforge.mappingverifier;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -26,129 +27,103 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.objectweb.asm.Type;
 
-import net.minecraftforge.mappingverifier.Mappings.ClsInfo;
+import net.minecraftforge.srgutils.IMappingFile;
+import net.minecraftforge.srgutils.IMappingFile.IClass;
 
-public class UniqueIDs extends SimpleVerifier
-{
-    protected UniqueIDs(MappingVerifier verifier)
-    {
+public class UniqueIDs extends SimpleVerifier {
+    protected UniqueIDs(MappingVerifier verifier) {
         super(verifier);
     }
 
     @Override
-    public boolean process()
-    {
+    public boolean process() {
         InheratanceMap inh = verifier.getInheratance();
-        Mappings map = verifier.getMappings();
+        IMappingFile map = verifier.getMappings();
         Map<Integer, Set<String>> claimed = new HashMap<>();
         Map<String, Set<List<String>>> signatures = new HashMap<>();
+        Consumer<String[]> gather = entry -> {
+            String idstr = entry[0].split("_")[1];
+            if (idstr.matches("\\d+")) {
+                claimed.computeIfAbsent(Integer.parseInt(idstr), k -> new HashSet<>()).add(entry[0]);
+                signatures.computeIfAbsent(entry[0], k -> new HashSet<>()).add(Arrays.asList(Arrays.copyOfRange(entry, 1, entry.length)));
+            }
+        };
 
-        inh.getRead().forEach(cls ->
-        {
-            ClsInfo info = map.getClass(cls.name);
-            Consumer<String[]> gather = entry ->
-            {
-                String idstr = entry[0].split("_")[1];
-                if (idstr.matches("\\d+"))
-                {
-                    claimed.computeIfAbsent(Integer.parseInt(idstr), k -> new HashSet<>()).add(entry[0]);
-                    signatures.computeIfAbsent(entry[0], k -> new HashSet<>()).add(Arrays.asList(Arrays.copyOfRange(entry, 1, entry.length)));
-                }
-            };
+        inh.getRead().forEach(cls -> {
+            IClass info = map.getClass(cls.name);
 
             cls.fields.values().stream()
-            .map(field -> new String[]{info.map(field.name), field.name})
+            .map(field -> new String[]{info.remapField(field.name), cls.name, field.name})
             .filter(entry -> entry[0].startsWith("field_"))
             .forEach(gather);
 
             cls.methods.values().stream()
-            .map(method  -> new String[] {info.map(method.name, method.desc), method.name, method.desc})
+            .map(method  -> new String[] {info.remapMethod(method.name, method.desc), cls.name, method.name, method.desc})
             .filter(entry -> entry[0].startsWith("func_"))
             .forEach(gather);
         });
 
         Map<String, List<Integer>> ctrs = verifier.getCtrs();
-        if (ctrs != null)
-        {
-            ctrs.values().stream().flatMap(List::stream).forEach(id -> claimed.computeIfAbsent(id, k -> new HashSet<>()).add(id.toString()));
+        if (ctrs != null) {
+            ctrs.forEach((k,v) -> {
+                v.forEach(id -> {
+                    claimed.computeIfAbsent(id, a -> new HashSet<>()).add(id.toString());
+                    signatures.computeIfAbsent(id.toString(), a -> new HashSet<>()).add(Arrays.asList(k));
+                });
+            });
         }
 
-        return claimed.entrySet().stream().filter(e -> e.getValue().size() > 1 || different(signatures.get(e.getValue().iterator().next()))).sorted((e1, e2) -> e1.getKey().compareTo(e2.getKey())).map(entry ->
-        {
+        return claimed.entrySet().stream()
+        .filter(e -> e.getValue().size() > 1 || different(e.getValue().iterator().next(), signatures.get(e.getValue().iterator().next()), inh))
+        .sorted((e1, e2) -> e1.getKey().compareTo(e2.getKey())).map(entry -> {
             error("Duplicate ID: %s (%s)", entry.getKey().toString(), entry.getValue().stream().sorted().collect(Collectors.joining(", ")));
-            entry.getValue().stream().sorted().forEach(name ->
-            {
+            entry.getValue().stream().sorted().forEach(name -> {
                 Set<List<String>> sigs = signatures.get(name);
-                error("    %s (%s)", name, sigs == null ? "null" : sigs.stream().map(e -> String.join(" ", e)).sorted().collect(Collectors.joining(", ")));
+                List<String> fields = new ArrayList<>();
+                Map<String, Integer> methods = new HashMap<>();
+                if (sigs != null) {
+                    sigs.stream().forEach(pts -> {
+                        if (pts.size() == 2)
+                            fields.add(pts.get(0) + '/' + pts.get(1));
+                        else {
+                            InheratanceMap.Class cls = inh.getClass(pts.get(0));
+                            InheratanceMap.Method mtd = cls.getMethod(pts.get(1), pts.get(2));
+                            InheratanceMap.Method root = mtd.getRoot();
+                            String key = root.owner.name +'/' + root.name + root.desc;
+                            methods.put(key, methods.computeIfAbsent(key, k -> 0) + 1);
+                        }
+                    });
+                }
+                error("    %s (%s)", name, Stream.concat(fields.stream(), methods.entrySet().stream().map(e -> e.getKey() + '[' + e.getValue() + ']')).sorted().collect(Collectors.joining(", ")));
             });
             return false;
         }).reduce(true, (a,b)-> a && b);
     }
 
-    private boolean different(Set<List<String>> entries) {
-        if (entries == null || entries.size() == 1)
+    private boolean different(String id, Set<List<String>> entries, InheratanceMap inh) {
+        if (entries == null || entries.stream().map(e -> e.stream().skip(1).collect(Collectors.joining(" "))).distinct().count() == 1)
             return false;
 
-        boolean field = false, method = false;
-        String name = null;
-        int size = -1;
-        Type ret = null;
-        Type[] args = null;
-
-        for (List<String> pts : entries)
-        {
-
-            if (name == null)
-                name = pts.get(0);
-            //else if (!name.equals(pts.get(0))) //Synthetic bouncer methods with different return types have different names...
-            //    return true;
-
-            if (pts.size() == 1)
-            {
-                if (field) return true;
-                field = true;
-            }
-            else if (pts.size() == 2)
-            {
-                method = true;
-                String desc = pts.get(1);
-                if (size == -1)
-                {
-                    size = Type.getArgumentsAndReturnSizes(desc);
-                    ret = Type.getReturnType(desc);
-                    args = Type.getArgumentTypes(desc);
-                }
-                else
-                {
-                    if (size != Type.getArgumentsAndReturnSizes(desc) ||
-                       !sameType(ret, Type.getReturnType(desc)))
-                        return true;
-
-                    Type[] _args = Type.getArgumentTypes(desc);
-                    if (_args.length != args.length) return true;
-                    for (int x = 0; x < args.length; x++)
-                        if (!sameType(args[x], _args[x])) return true;
-                }
-            }
-        }
-
-        if (field && method)
+        if (entries.stream().mapToInt(List::size).distinct().count() != 1) //Has both method and field
             return true;
 
-        return false;
-    }
+        if (entries.iterator().next().size() == 2) // Only Fields
+            return true; //More then one field? Thats bad
 
-    private boolean sameType(Type a, Type b)
-    {
-        if (a.getSort() != Type.OBJECT && a.getSort() != Type.ARRAY)
-            return a.getSort() == b.getSort();
+        List<InheratanceMap.Method> roots = new ArrayList<>();
+        // Only Methods
+        for (List<String> pts : entries) {
+            InheratanceMap.Class cls = inh.getClass(pts.get(0));
+            InheratanceMap.Method mtd = cls.getMethod(pts.get(1), pts.get(2));
+            InheratanceMap.Method root = mtd.getRoot();
+            if (!roots.contains(root))
+                roots.add(root);
+        }
 
-        if (a.getSort() == Type.ARRAY)
-            return b.getSort() == Type.ARRAY && a.getDimensions() == b.getDimensions() && sameType(a.getElementType(), b.getElementType());
-
-        return a.getSort() == Type.OBJECT && b.getSort() == Type.OBJECT; //Due to overrides in generic classes having changed class names, lets just assume they are the same if they are objects.
+        return roots.size() > 1;
     }
 }

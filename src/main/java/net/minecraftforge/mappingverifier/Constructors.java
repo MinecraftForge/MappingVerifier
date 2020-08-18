@@ -1,6 +1,6 @@
 /*
  * Mapping Verifier
- * Copyright (c) 2016-2018.
+ * Copyright (c) 2016-2020.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -24,32 +24,29 @@ import java.util.stream.Collectors;
 
 import org.objectweb.asm.tree.ClassNode;
 
-public class Constructors extends SimpleVerifier
-{
-    protected Constructors(MappingVerifier verifier)
-    {
+import net.minecraftforge.srgutils.IMappingFile;
+
+public class Constructors extends SimpleVerifier {
+    protected Constructors(MappingVerifier verifier) {
         super(verifier);
     }
 
     @Override
-    public boolean process()
-    {
+    public boolean process() {
         InheratanceMap inh = verifier.getInheratance();
-        Mappings map = verifier.getMappings();
+        IMappingFile map = verifier.getMappings();
         Map<String, List<Integer>> ctrs = verifier.getCtrs();
         if (ctrs == null)
             return true; // No constructors loaded, dont check
 
         boolean success = inh.getRead()
         .sorted((o1, o2) -> o1.name.compareTo(o2.name))
-        .map(cls ->
-        {
-            String clsName = map.map(cls.name);
+        .map(cls -> {
+            String clsName = map.remapClass(cls.name);
             Main.LOG.fine("  Processing: " + clsName);
             ClassNode node = inh.getNode(cls.name);
 
-            if (node == null)
-            {
+            if (node == null) {
                 error("  Missing node: " + cls.name);
                 return false; //Does this ever happen?
             }
@@ -58,9 +55,8 @@ public class Constructors extends SimpleVerifier
             return node.methods.stream()
                 .filter(m -> "<init>".equals(m.name) && !"()V".equals(m.desc))
                 .map(mtd -> {
-                    String desc = map.mapDesc(mtd.desc);
-                    if (!ctrs.containsKey(clsName + desc))
-                    {
+                    String desc = map.remapDescriptor(mtd.desc);
+                    if (!ctrs.containsKey(clsName + desc)) {
                         error("    Missing Ctr: " + clsName + " " + desc);
                         return false;
                     }

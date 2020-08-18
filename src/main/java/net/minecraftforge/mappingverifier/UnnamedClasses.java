@@ -19,16 +19,23 @@
 package net.minecraftforge.mappingverifier;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
-public interface IVerifier {
-    default String getName() {
-        return this.getClass().getSimpleName();
+import net.minecraftforge.srgutils.IMappingFile.IClass;
+
+public class UnnamedClasses extends SimpleVerifier {
+    protected UnnamedClasses(MappingVerifier verifier) {
+        super(verifier);
     }
 
-    public List<String> getErrors();
+    @Override
+    public boolean process() {
+        List<String> unnamed = verifier.getMappings()
+        .getClasses().stream().map(IClass::getMapped)
+        .filter(c -> c.contains("C_"))
+        .collect(Collectors.toList());
 
-    /**
-     * @return True if everything went fine, false if something was logged to errors.
-     */
-    boolean process();
+        unnamed.forEach(c -> error("    Unnamed Class: " + c));
+        return unnamed.isEmpty();
+    }
 }

@@ -1,6 +1,6 @@
 /*
  * Mapping Verifier
- * Copyright (c) 2016-2018.
+ * Copyright (c) 2016-2020.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,24 +21,20 @@ package net.minecraftforge.mappingverifier;
 import java.util.ArrayList;
 import java.util.List;
 
-public abstract class SimpleVerifier implements IVerifier
-{
+public abstract class SimpleVerifier implements IVerifier {
     protected final MappingVerifier verifier;
     private List<String> errors = new ArrayList<>();
 
-    protected SimpleVerifier(MappingVerifier verifier)
-    {
+    protected SimpleVerifier(MappingVerifier verifier) {
         this.verifier = verifier;
     }
 
     @Override
-    public List<String> getErrors()
-    {
+    public List<String> getErrors() {
         return errors;
     }
 
-    protected void error(String format, String... args)
-    {
+    protected void error(String format, String... args) {
         String line = String.format(format, (Object[])args);
         Main.LOG.fine(line);
         errors.add(line);

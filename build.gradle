@@ -46,11 +46,19 @@ artifacts {
     archives shadowJar
 }
 
+
+repositories {
+    maven { url = 'http://files.minecraftforge.net/maven' }
+    mavenCentral()
+}
+
 dependencies {
     compile 'org.ow2.asm:asm:6.2'
     compile 'org.ow2.asm:asm-tree:6.2'
     compile 'org.ow2.asm:asm-util:6.2'
     compile 'net.sf.jopt-simple:jopt-simple:5.0.4'
+	//Because tons of projects all paarsing SRG files is annoying
+	compile 'net.minecraftforge:srgutils:0.2.+'
 }
 configurations { deployJars }
 uploadArchives {

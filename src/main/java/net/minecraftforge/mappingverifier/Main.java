@@ -1,6 +1,6 @@
 /*
  * Mapping Verifier
- * Copyright (c) 2016-2018.
+ * Copyright (c) 2016-2020.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -48,6 +48,7 @@ public class Main
         OptionSpec<File> jarArg = parser.accepts("jar").withRequiredArg().ofType(File.class).required();
         OptionSpec<File> mapArg = parser.accepts("map").withRequiredArg().ofType(File.class).required();
         OptionSpec<File> ctrArg = parser.accepts("ctr").withRequiredArg().ofType(File.class);
+        OptionSpec<File> sfxArg = parser.accepts("sfx").withRequiredArg().ofType(File.class);
         OptionSpec<String> logArg = parser.accepts("log").withRequiredArg().ofType(String.class);
         parser.accepts("verbose");
 
@@ -69,6 +70,7 @@ public class Main
             File jarFile = jarArg.value(options);
             File mapFile = mapArg.value(options);
             File ctrFile = options.has(ctrArg) ? ctrArg.value(options) : null;
+            File sfxFile = options.has(sfxArg) ? sfxArg.value(options) : null;
             String logFile = logArg.value(options);
             boolean verbose = options.has("verbose");
 
@@ -120,6 +122,7 @@ public class Main
             log("Map:      " + mapFile);
             log("Log:      " + logFile);
             log("Ctr:      " + ctrFile);
+            log("Sfx:      " + sfxFile);
 
             try
             {
@@ -128,6 +131,10 @@ public class Main
                 mv.loadMap(mapFile);
                 mv.loadJar(jarFile); //TODO: Add full classpath so we can check all classes including JVM?
                 mv.loadCtrs(ctrFile);
+                if (sfxFile != null) {
+                    mv.loadSfxs(sfxFile);
+                    mv.addTask("class_names");
+                }
                 if (!mv.verify())
                 {
                     for (IVerifier task : mv.getTasks())

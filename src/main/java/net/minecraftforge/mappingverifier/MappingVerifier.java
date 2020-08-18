@@ -1,6 +1,6 @@
 /*
  * Mapping Verifier
- * Copyright (c) 2016-2018.
+ * Copyright (c) 2016-2020.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -25,194 +25,106 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.zip.ZipFile;
 
-import net.minecraftforge.mappingverifier.Mappings.ClsInfo;
+import net.minecraftforge.srgutils.IMappingFile;
 
-public class MappingVerifier
-{
+public class MappingVerifier {
     @SuppressWarnings("serial")
-    private static Map<String, Function<MappingVerifier, IVerifier>> VERIFIERS = new HashMap<String, Function<MappingVerifier, IVerifier>>()
-    {{
+    private static Map<String, Function<MappingVerifier, IVerifier>> VERIFIERS = new HashMap<String, Function<MappingVerifier, IVerifier>>() {{
         put("accesslevels", AccessLevels::new);
         put("overridenames", OverrideNames::new);
         put("uniqueids", UniqueIDs::new);
         put("ctrs", Constructors::new);
+        put("unamed_classes", UnnamedClasses::new);
+    }};
+    @SuppressWarnings("serial")
+    private static Map<String, Function<MappingVerifier, IVerifier>> EXTRA = new HashMap<String, Function<MappingVerifier, IVerifier>>() {{
+        put("class_names", ClassNameStandards::new);
     }};
 
-    private Mappings map = new Mappings();
+
+    private IMappingFile map = null;
     private InheratanceMap inh = new InheratanceMap();
     private Map<String, List<Integer>> ctrs;
     private List<IVerifier> tasks = new ArrayList<>();
+    private Map<String, String> suffixes;
 
-    public void addDefaultTasks()
-    {
+    public void addDefaultTasks() {
         VERIFIERS.values().forEach(v -> tasks.add(v.apply(this)));
     }
 
-    public void addTask(String name)
-    {
+    public void addTask(String name) {
         Function<MappingVerifier, IVerifier> sup = VERIFIERS.get(name.toLowerCase(Locale.ENGLISH));
-        if (sup == null)
-            throw new IllegalArgumentException("Unknown task \"" + name + "\" Known: " + VERIFIERS.keySet().stream().collect(Collectors.joining(", ")));
+        if (sup == null) {
+            sup = EXTRA.get(name.toLowerCase(Locale.ENGLISH));
+            if (sup == null)
+                throw new IllegalArgumentException("Unknown task \"" + name + "\" Known: " + Stream.concat(VERIFIERS.keySet().stream(), EXTRA.keySet().stream()).collect(Collectors.joining(", ")));
+        }
         tasks.add(sup.apply(this));
     }
 
-    public void addTask(IVerifier task)
-    {
+    public void addTask(IVerifier task) {
         tasks.add(task);
     }
 
-    public boolean verify()
-    {
+    public boolean verify() {
+        inh.resolve();
         boolean valid = true;
         for (IVerifier v : tasks)
-        {
             valid &= v.process();
-        }
         return valid;
     }
 
-    public List<IVerifier> getTasks()
-    {
+    public List<IVerifier> getTasks() {
         return tasks;
     }
 
-    public Mappings getMappings()
-    {
+    public IMappingFile getMappings() {
         return map;
     }
 
-    public InheratanceMap getInheratance()
-    {
+    public InheratanceMap getInheratance() {
         return inh;
     }
 
-    public Map<String, List<Integer>> getCtrs()
-    {
+    public Map<String, List<Integer>> getCtrs() {
         return ctrs;
     }
 
-    //TODO: Usew SRGUtils
-    public void loadMap(File mapFile) throws IOException
-    {
-        try (Stream<String> stream = Files.lines(Paths.get(mapFile.toURI())))
-        {
-            BiFunction<String, Character, String[]> rsplit = (i, c) -> {
-                int idx = i.lastIndexOf(c);
-                return idx == -1 ? new String[]{i} :  new String[]{i.substring(0, idx), i.substring(idx + 1)};
-            };
-
-            List<String> lines = stream.map(l -> l.split("#")[0].replaceAll("\\s+$", "")).filter(l -> !l.isEmpty()).collect(Collectors.toList());
-            if (!lines.isEmpty())
-            {
-                String first = lines.get(0);
-                if (first.contains("PK:") || first.contains("CL:") || first.contains("FD:") || first.contains("MD:"))
-                {
-                    lines.stream().map(l -> l.split(" ")).forEachOrdered( l ->
-                    {
-                        if (l[0].equals("PK:"))
-                            map.addPackage(l[1], l[2]);
-                        else if (l[0].equals("CL:"))
-                            map.addMapping(l[1], l[2]);
-                        else if (l[0].equals("FD:"))
-                        {
-                            String[] ptsO = rsplit.apply(l[1], '/');
-                            String[] ptsM = rsplit.apply(l[2], '/');
-                            map.getClass(ptsO[0]).putField(ptsO[1], ptsM[1]);
-                        }
-                        else if (l[0].equals("MD:"))
-                        {
-                            String[] ptsO = rsplit.apply(l[1], '/');
-                            String[] ptsM = rsplit.apply(l[3], '/');
-                            map.getClass(ptsO[0]).putMethod(ptsO[1], l[2], ptsM[1], l[4]);
-                        }
-                    });
-                }
-                else
-                {
-                    lines.stream().filter(l -> !l.startsWith("\t")).map(l -> l.split(" ")).filter(l -> l.length == 2).forEach(l -> map.addMapping(l[0], l[1]));
-                    ClsInfo currentCls = null;
-                    for (String line : lines)
-                    {
-                        if (line.startsWith("\t"))
-                        {
-                            if (currentCls == null)
-                            {
-                                Main.LOG.warning("Invalid TSRG Line, Missing Current class: " + line);
-                            }
-                            else
-                            {
-                                String[] parts = line.substring(1).split(" ");
-                                if (parts.length == 2)
-                                    currentCls.putField(parts[0], parts[1]);
-                                else if (parts.length == 3)
-                                    currentCls.putMethod(parts[0], parts[1], parts[2], map.mapDesc(parts[1]));
-                                else
-                                    Main.LOG.warning("Invalid TSRG Line, To many peices: " + line);
-                            }
-                        }
-                        else
-                        {
-                            String[] parts = line.split(" ");
-                            if (parts.length == 2)
-                                currentCls = map.getClass(parts[0]);
-                            else if (parts.length == 3)
-                                map.getClass(parts[0]).putField(parts[1], parts[2]);
-                            else if (parts.length == 4)
-                                map.getClass(parts[0]).putMethod(parts[1], parts[2], parts[3], map.mapDesc(parts[2]));
-                            else
-                                Main.LOG.warning("Invalid CSRG Line, To many peices: " + line);
-                        }
-                    }
-                }
-            }
-            else
-            {
-                Main.LOG.warning("Invalid map file: No entries");
-            }
-
-        }
-        catch (IOException e)
-        {
-            throw new IOException("Could not open map file: " + e.getMessage());
-        }
+    public Map<String, String> getSuffixes() {
+        return suffixes;
     }
 
-    public void loadJar(File input) throws IOException
-    {
-        try (ZipFile zip = new ZipFile(input))
-        {
+    public void loadMap(File mapFile) throws IOException {
+        this.map = IMappingFile.load(mapFile);
+    }
+
+    public void loadJar(File input) throws IOException {
+        try (ZipFile zip = new ZipFile(input)) {
             zip.stream().filter(e -> !e.isDirectory() && e.getName().endsWith(".class") && !e.getName().startsWith("META-INF/")) //Classes Only, No support for multi-release jars.
-            .forEach(e ->
-            {
-                try
-                {
+            .forEach(e -> {
+                try {
                     Main.LOG.info("Loading: " + e.getName());
                     inh.processClass(zip.getInputStream(e));
-                }
-                catch (IOException e1)
-                {
+                } catch (IOException e1) {
                     e1.printStackTrace();
                 }
             });
         }
     }
 
-    public void loadCtrs(File input) throws IOException
-    {
-        try (Stream<String> stream = Files.lines(Paths.get(input.toURI())))
-        {
+    public void loadCtrs(File input) throws IOException {
+        try (Stream<String> stream = Files.lines(Paths.get(input.toURI()))) {
             List<String[]> lines = stream.map(l -> l.split("#")[0].replaceAll("\\s+$", "")).filter(l -> !l.isEmpty()).map(l -> l.split(" ")).collect(Collectors.toList());
-            if (!lines.isEmpty())
-            {
+            if (!lines.isEmpty()) {
                 this.ctrs = new HashMap<>();
                 for (String[] line : lines) {
                     if (line.length != 3)
@@ -220,16 +132,32 @@ public class MappingVerifier
                     else
                         ctrs.computeIfAbsent(line[1] + line[2], k -> new ArrayList<>()).add(Integer.parseInt(line[0]));
                 }
-            }
-            else
-            {
+            } else {
                 Main.LOG.warning("Invalid ctr file: No entries");
             }
 
-        }
-        catch (IOException e)
-        {
+        } catch (IOException e) {
             throw new IOException("Could not open ctr file: " + e.getMessage());
+        }
+    }
+
+
+    public void loadSfxs(File input) throws IOException {
+        try (Stream<String> stream = Files.lines(Paths.get(input.toURI()))) {
+            List<String[]> lines = stream.map(l -> l.split("#")[0].replaceAll("\\s+$", "")).filter(l -> !l.isEmpty()).map(l -> l.split(" ")).collect(Collectors.toList());
+            if (lines.isEmpty()) {
+                Main.LOG.warning("Invalid suffix file: No entries");
+            } else {
+                this.suffixes = new LinkedHashMap<>();
+                for (String[] line : lines) {
+                    if (line.length != 2)
+                        Main.LOG.warning("Invalid Suffix Line: " + Arrays.asList(line).stream().collect(Collectors.joining(" ")));
+                    else
+                        this.suffixes.put(line[0], line[1]);
+                }
+            }
+        } catch (IOException e) {
+            throw new IOException("Could not open suffix file: " + e.getMessage());
         }
     }
 }
