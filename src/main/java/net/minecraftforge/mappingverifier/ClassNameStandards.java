@@ -103,6 +103,7 @@ public class ClassNameStandards extends SimpleVerifier {
                     errors.add("Underscore");
 
                 Set<String> parents = entry.getStack().stream().map(e -> o2m.remapClass(e.name)).collect(Collectors.toSet());
+                parents.add(o2m.remapClass(entry.name));
                 if (suffixes != null && !suffixes.isEmpty()) {
                     for (String type : suffixes.keySet()) {
                         String suffix = suffixes.get(type);
