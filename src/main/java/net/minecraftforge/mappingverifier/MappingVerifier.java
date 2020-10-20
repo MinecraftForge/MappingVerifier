@@ -20,6 +20,7 @@ package net.minecraftforge.mappingverifier;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -105,6 +106,15 @@ public class MappingVerifier {
 
     public void loadMap(File mapFile) throws IOException {
         this.map = IMappingFile.load(mapFile);
+    }
+
+    public void loadMap(InputStream mapStream) throws IOException {
+        this.map = IMappingFile.load(mapStream);
+    }
+
+    public void setMap(IMappingFile map)
+    {
+        this.map = map;
     }
 
     public void loadJar(File input) throws IOException {

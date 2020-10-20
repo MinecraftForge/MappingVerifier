@@ -59,6 +59,7 @@ dependencies {
     compile 'net.sf.jopt-simple:jopt-simple:5.0.4'
 	//Because tons of projects all paarsing SRG files is annoying
 	compile 'net.minecraftforge:srgutils:0.2.+'
+    compile 'de.siegmar:fastcsv:1.0.3'
 }
 configurations { deployJars }
 uploadArchives {
