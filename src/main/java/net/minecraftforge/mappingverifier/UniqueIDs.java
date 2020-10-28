@@ -89,7 +89,13 @@ public class UniqueIDs extends SimpleVerifier {
                     sigs.stream().forEach(pts -> {
                         if (pts.size() == 2)
                             fields.add(pts.get(0) + '/' + pts.get(1));
-                        else {
+                        else if (pts.size() == 1) { // Constructor
+                            int idx = pts.get(0).indexOf('(');
+                            String cls = pts.get(0).substring(0, idx);
+                            String desc = pts.get(0).substring(idx);
+                            String key = cls + "/<init>" + desc;
+                            methods.put(key, methods.computeIfAbsent(key, k -> 0) + 1);
+                        } else {
                             InheratanceMap.Class cls = inh.getClass(pts.get(0));
                             InheratanceMap.Method mtd = cls.getMethod(pts.get(1), pts.get(2));
                             InheratanceMap.Method root = mtd.getRoot();
