@@ -52,7 +52,7 @@ artifacts {
 
 
 repositories {
-    maven { url = 'http://files.minecraftforge.net/maven' }
+    maven { url = 'https://files.minecraftforge.net/maven' }
     mavenCentral()
 }
 
