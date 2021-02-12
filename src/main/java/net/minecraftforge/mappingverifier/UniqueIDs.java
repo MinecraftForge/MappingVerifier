@@ -29,8 +29,6 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.objectweb.asm.Type;
-
 import net.minecraftforge.srgutils.IMappingFile;
 import net.minecraftforge.srgutils.IMappingFile.IClass;
 
@@ -58,24 +56,14 @@ public class UniqueIDs extends SimpleVerifier {
 
             cls.fields.values().stream()
             .map(field -> new String[]{info.remapField(field.name), cls.name, field.name})
-            .filter(entry -> entry[0].startsWith("field_"))
+            .filter(entry -> entry[0].startsWith("field_") || entry[0].startsWith("f_"))
             .forEach(gather);
 
             cls.methods.values().stream()
             .map(method  -> new String[] {info.remapMethod(method.name, method.desc), cls.name, method.name, method.desc})
-            .filter(entry -> entry[0].startsWith("func_"))
+            .filter(entry -> entry[0].startsWith("func_") || entry[0].startsWith("m_"))
             .forEach(gather);
         });
-
-        Map<String, List<Integer>> ctrs = verifier.getCtrs();
-        if (ctrs != null) {
-            ctrs.forEach((k,v) -> {
-                v.forEach(id -> {
-                    claimed.computeIfAbsent(id, a -> new HashSet<>()).add(id.toString());
-                    signatures.computeIfAbsent(id.toString(), a -> new HashSet<>()).add(Arrays.asList(k));
-                });
-            });
-        }
 
         return claimed.entrySet().stream()
         .filter(e -> e.getValue().size() > 1 || different(e.getValue().iterator().next(), signatures.get(e.getValue().iterator().next()), inh))

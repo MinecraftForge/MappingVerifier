@@ -47,10 +47,7 @@ public class Main
         parser.accepts("version").forHelp();
         OptionSpec<File> jarArg = parser.accepts("jar").withRequiredArg().ofType(File.class).required();
         OptionSpec<File> mapArg = parser.accepts("map").withRequiredArg().ofType(File.class).required();
-        OptionSpec<File> ctrArg = parser.accepts("ctr").withRequiredArg().ofType(File.class);
-        OptionSpec<File> sfxArg = parser.accepts("sfx").withRequiredArg().ofType(File.class);
         OptionSpec<String> logArg = parser.accepts("log").withRequiredArg().ofType(String.class);
-        OptionSpec<String> snapArg = parser.accepts("snap").withRequiredArg().ofType(String.class);
         parser.accepts("verbose");
 
         try
@@ -70,10 +67,8 @@ public class Main
 
             File jarFile = jarArg.value(options);
             File mapFile = mapArg.value(options);
-            File ctrFile = options.has(ctrArg) ? ctrArg.value(options) : null;
-            File sfxFile = options.has(sfxArg) ? sfxArg.value(options) : null;
             String logFile = logArg.value(options);
-            String snapVersion = options.has(snapArg) ? snapArg.value(options) : null;
+            //String snapVersion = options.has(snapArg) ? snapArg.value(options) : null;
             boolean verbose = options.has("verbose");
 
             Main.LOG.setUseParentHandlers(false);
@@ -123,31 +118,16 @@ public class Main
             log("Jar:      " + jarFile);
             log("Map:      " + mapFile);
             log("Log:      " + logFile);
-            log("Ctr:      " + ctrFile);
-            log("Sfx:      " + sfxFile);
-            log("Snap:     " + snapVersion);
 
             try
             {
                 MappingVerifier mv = new MappingVerifier();
 
-                if (snapVersion == null)
-                {
-                    mv.addDefaultTasks();
-                    mv.loadMap(mapFile);
-                }
-                else
-                {
-                    mv.addTask("overridenames");
-                    Crowdsourced.process(LOG, mv, snapVersion, mapFile);
-                }
+                mv.addDefaultTasks();
+                mv.loadMap(mapFile);
 
                 mv.loadJar(jarFile); //TODO: Add full classpath so we can check all classes including JVM?
-                mv.loadCtrs(ctrFile);
-                if (sfxFile != null) {
-                    mv.loadSfxs(sfxFile);
-                    mv.addTask("class_names");
-                }
+
                 if (!mv.verify())
                 {
                     for (IVerifier task : mv.getTasks())

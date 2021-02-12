@@ -21,18 +21,13 @@ package net.minecraftforge.mappingverifier;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import java.util.zip.ZipFile;
 
 import net.minecraftforge.srgutils.IMappingFile;
@@ -43,20 +38,12 @@ public class MappingVerifier {
         put("accesslevels", AccessLevels::new);
         put("overridenames", OverrideNames::new);
         put("uniqueids", UniqueIDs::new);
-        put("ctrs", Constructors::new);
-        put("unamed_classes", UnnamedClasses::new);
-    }};
-    @SuppressWarnings("serial")
-    private static Map<String, Function<MappingVerifier, IVerifier>> EXTRA = new HashMap<String, Function<MappingVerifier, IVerifier>>() {{
-        put("class_names", ClassNameStandards::new);
     }};
 
 
     private IMappingFile map = null;
     private InheratanceMap inh = new InheratanceMap();
-    private Map<String, List<Integer>> ctrs;
     private List<IVerifier> tasks = new ArrayList<>();
-    private Map<String, String> suffixes;
 
     public void addDefaultTasks() {
         VERIFIERS.values().forEach(v -> tasks.add(v.apply(this)));
@@ -64,11 +51,8 @@ public class MappingVerifier {
 
     public void addTask(String name) {
         Function<MappingVerifier, IVerifier> sup = VERIFIERS.get(name.toLowerCase(Locale.ENGLISH));
-        if (sup == null) {
-            sup = EXTRA.get(name.toLowerCase(Locale.ENGLISH));
-            if (sup == null)
-                throw new IllegalArgumentException("Unknown task \"" + name + "\" Known: " + Stream.concat(VERIFIERS.keySet().stream(), EXTRA.keySet().stream()).collect(Collectors.joining(", ")));
-        }
+        if (sup == null)
+            throw new IllegalArgumentException("Unknown task \"" + name + "\" Known: " + VERIFIERS.keySet().stream().collect(Collectors.joining(", ")));
         tasks.add(sup.apply(this));
     }
 
@@ -96,14 +80,6 @@ public class MappingVerifier {
         return inh;
     }
 
-    public Map<String, List<Integer>> getCtrs() {
-        return ctrs;
-    }
-
-    public Map<String, String> getSuffixes() {
-        return suffixes;
-    }
-
     public void loadMap(File mapFile) throws IOException {
         this.map = IMappingFile.load(mapFile);
     }
@@ -128,46 +104,6 @@ public class MappingVerifier {
                     e1.printStackTrace();
                 }
             });
-        }
-    }
-
-    public void loadCtrs(File input) throws IOException {
-        try (Stream<String> stream = Files.lines(Paths.get(input.toURI()))) {
-            List<String[]> lines = stream.map(l -> l.split("#")[0].replaceAll("\\s+$", "")).filter(l -> !l.isEmpty()).map(l -> l.split(" ")).collect(Collectors.toList());
-            if (!lines.isEmpty()) {
-                this.ctrs = new HashMap<>();
-                for (String[] line : lines) {
-                    if (line.length != 3)
-                        Main.LOG.warning("Invalid CTR Line: " + Arrays.asList(line).stream().collect(Collectors.joining(" ")));
-                    else
-                        ctrs.computeIfAbsent(line[1] + line[2], k -> new ArrayList<>()).add(Integer.parseInt(line[0]));
-                }
-            } else {
-                Main.LOG.warning("Invalid ctr file: No entries");
-            }
-
-        } catch (IOException e) {
-            throw new IOException("Could not open ctr file: " + e.getMessage());
-        }
-    }
-
-
-    public void loadSfxs(File input) throws IOException {
-        try (Stream<String> stream = Files.lines(Paths.get(input.toURI()))) {
-            List<String[]> lines = stream.map(l -> l.split("#")[0].replaceAll("\\s+$", "")).filter(l -> !l.isEmpty()).map(l -> l.split(" ")).collect(Collectors.toList());
-            if (lines.isEmpty()) {
-                Main.LOG.warning("Invalid suffix file: No entries");
-            } else {
-                this.suffixes = new LinkedHashMap<>();
-                for (String[] line : lines) {
-                    if (line.length != 2)
-                        Main.LOG.warning("Invalid Suffix Line: " + Arrays.asList(line).stream().collect(Collectors.joining(" ")));
-                    else
-                        this.suffixes.put(line[0], line[1]);
-                }
-            }
-        } catch (IOException e) {
-            throw new IOException("Could not open suffix file: " + e.getMessage());
         }
     }
 }

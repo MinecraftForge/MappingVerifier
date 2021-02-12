@@ -1,23 +1,22 @@
 plugins {
-  id 'net.minecrell.licenser' version '0.3'
-  id 'org.ajoberstar.grgit' version '2.3.0'
-  id 'com.github.johnrengelman.shadow' version '2.0.4'
+    id 'java'
+    id 'eclipse'
+    id 'maven-publish'
+    id 'net.minecrell.licenser' version '0.4.1'
+    id 'org.ajoberstar.grgit' version '4.1.0'
+    id 'com.github.johnrengelman.shadow' version '2.0.4'
 }
-
-apply plugin: 'java'
-apply plugin: 'eclipse'
-apply plugin: 'maven'
 
 group = 'net.minecraftforge'
 version = gitVersion()
-targetCompatibility = sourceCompatibility = compileJava.sourceCompatibility = compileJava.targetCompatibility = '1.8'
+java.toolchain.languageVersion = JavaLanguageVersion.of(8)
 
 repositories {
     mavenCentral()
 }
 
 def gitVersion() {
-    def desc = grgit.describe(longDescr: true).split('-') as List
+    def desc = grgit.describe(longDescr: true, tags:true).split('-') as List
     def hash = desc.remove(desc.size() - 1)
     def offset = desc.remove(desc.size() - 1)
     def tag = desc.join('-')
@@ -41,6 +40,11 @@ shadowJar {
     manifest.attributes('Implementation-Version': project.version)
 }
 
+task sourcesJar(type: Jar) {
+    archiveClassifier = 'sources'
+    from sourceSets.main.allSource
+}
+
 artifacts {
     archives jar
     archives shadowJar
@@ -53,68 +57,60 @@ repositories {
 }
 
 dependencies {
-    compile 'org.ow2.asm:asm:6.2'
-    compile 'org.ow2.asm:asm-tree:6.2'
-    compile 'org.ow2.asm:asm-util:6.2'
-    compile 'net.sf.jopt-simple:jopt-simple:5.0.4'
+    implementation 'org.ow2.asm:asm:9.0'
+    implementation 'org.ow2.asm:asm-tree:9.0'
+    implementation 'org.ow2.asm:asm-util:9.0'
+    implementation 'net.sf.jopt-simple:jopt-simple:5.0.4'
 	//Because tons of projects all paarsing SRG files is annoying
-	compile 'net.minecraftforge:srgutils:0.2.+'
-    compile 'de.siegmar:fastcsv:1.0.3'
+	implementation 'net.minecraftforge:srgutils:0.4.+'
 }
-configurations { deployJars }
-uploadArchives {
-    repositories {
-        add project.repositories.mavenLocal()
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifact jar
+            artifact sourcesJar
+            artifact shadowJar
+            pom {
+                name = 'MappingVerifier'
+                description = 'Utility to verify mapping files do not mess up bytecode access/layout.'
+                url = 'https://github.com/MinecraftForge/MappingVerifier'
+                scm {
+                    url = 'https://github.com/MinecraftForge/MappingVerifier'
+                    connection = 'scm:git:git://github.com/MinecraftForge/MappingVerifier.git'
+                    developerConnection = 'scm:git:git@github.com:MinecraftForge/MappingVerifier.git'
+                }
+                issueManagement {
+                    system = 'github'
+                    url = 'https://github.com/MinecraftForge/MappingVerifier/issues'
+                }
+
+                licenses {
+                    license {
+                        name = 'LGPLv2.1'
+                        url = 'https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id = 'LexManos'
+                        name = 'LexManos'
+                    }
+                }
+            }
+        }
     }
-    repositories.mavenDeployer {
-        configuration = configurations.deployJars
-
-        if (project.hasProperty('mavenPassword')) {
-            logger.info('Publishing to files server')
-            repository(url: 'http://files.minecraftforge.net/maven/manage/upload') {
-                authentication(userName: 'forge', password: project.getProperty('mavenPassword'))
-            }
-        } else {
-            logger.info('Publishing to repo folder')
-            repository(url: 'file://localhost/' + project.file('repo').getAbsolutePath())
-        }
-
-        pom {
-            groupId = project.group
-            version = project.version
-            artifactId = project.archivesBaseName
-        }
-        pom.project {
-            name project.archivesBaseName
-            packaging 'jar'
-            description 'Verifier for mappings against jar files.'
-            url 'https://github.com/MinecraftForge/MappingVerifier'
-
-            scm {
-                url 'https://github.com/MinecraftForge/MappingVerifier'
-                connection 'scm:git:git://github.com/MinecraftForge/MappingVerifier.git'
-                developerConnection 'scm:git:git@github.com:MinecraftForge/MappingVerifier.git'
-            }
-
-            issueManagement {
-                system 'github'
-                url 'https://github.com/MinecraftForge/MappingVerifier/issues'
-            }
-
-            licenses {
-                license {
-                    name = 'LGPLv2.1'
-                    url = 'https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt'
-                    distribution 'repo'
+    repositories {
+        maven {
+            if (project.hasProperty('forgeMavenPassword')) {
+                credentials {
+                    username project.properties.forgeMavenUser
+                    password project.properties.forgeMavenPassword
                 }
-            }
-
-            developers {
-                developer {
-                    id 'LexManos'
-                    name 'Lex Manos'
-                    roles { role 'developer' }
-                }
+                url 'https://files.minecraftforge.net/maven/manage/upload'
+            } else {
+                url 'file://' + rootProject.file('repo').getAbsolutePath()
             }
         }
     }

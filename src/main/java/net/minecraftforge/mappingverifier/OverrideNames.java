@@ -75,7 +75,8 @@ public class OverrideNames extends SimpleVerifier {
             .sorted((o1, o2) -> o1.name.equals(o2.name) ? o1.desc.compareTo(o2.desc) : o1.name.compareTo(o2.name))
             .filter(mt -> (mt.access & Opcodes.ACC_STATIC) == 0 && !mt.name.startsWith("<"))
             .map(mt -> {
-                String newName = map.getClass(cls.name).remapMethod(mt.name, mt.desc);
+                IClass clsI = map.getClass(cls.name);
+                String newName = clsI.remapMethod(mt.name, mt.desc);
                 String newSignature = map.remapDescriptor(mt.desc);
 
                 return cls.getStack().stream().map(parent -> {
