@@ -22,6 +22,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -139,26 +141,47 @@ public class InheratanceMap {
             for (Class parent : cls.getStack()) {
                 Method pmtd = parent.getMethod(mtd.name, mtd.desc);
                 if (pmtd != null && canBeOverriden.test(pmtd)) {
-                    mtd.override = pmtd.getRoot();
+                    mtd.overrides.addAll(pmtd.getRoots());
                     break;
                 }
             }
         }
 
         for (Method mtd : cls.methods.values()) {
-            if (mtd.override == null && !mtd.bouncers.isEmpty() && canOverride.test(mtd)) {
+            if (mtd.overrides.isEmpty() && !mtd.bouncers.isEmpty() && canOverride.test(mtd)) {
                 for (Method bounce : mtd.bouncers) {
-                    if (bounce.override != null) {
-                        mtd.override = bounce.override;
+                    if (!bounce.overrides.isEmpty()) {
+                        mtd.overrides.addAll(bounce.overrides);
                         break;
                     }
                 }
             }
         }
 
+        if (!cls.isAbstract()) {
+            Map<String, Method> abs = new HashMap<>();
+            List<Class> stack = new ArrayList<>(cls.getStack());
+            stack.add(0, cls);
+            stack.stream()
+            .flatMap(c -> c.methods.values().stream())
+            .filter(Node::isAbstract)
+            .filter(mtd -> mtd.overrides.isEmpty())
+            .forEach(mtd -> abs.put(mtd.name + mtd.desc, mtd));
+
+            for (Class parent : stack) {
+                for (Method mtd : parent.methods.values()) {
+                    if (mtd.isAbstract())
+                        continue;
+
+                    Method target = abs.remove(mtd.name + mtd.desc);
+                    if (target != null)
+                        mtd.overrides.add(target);
+                }
+            }
+        }
+
         cls.resolved = true;
     }
-
 
     public static class Class {
         private boolean resolved = false;
@@ -181,6 +204,10 @@ public class InheratanceMap {
 
         public int getAccess() {
             return access;
+        }
+
+        public boolean isAbstract() {
+            return (getAccess() & ACC_ABSTRACT) != 0;
         }
 
         public Class getParent() {
@@ -242,6 +269,18 @@ public class InheratanceMap {
             this.hash = (name + desc).hashCode();
         }
 
+        public int getAccess() {
+            return this.access;
+        }
+
+        public boolean isAbstract() {
+            return (getAccess() & ACC_ABSTRACT) != 0;
+        }
+
+        public String getKey() {
+            return this.owner.name + "/" + this.name + this.desc;
+        }
+
         @Override
         public int hashCode() {
             return hash;
@@ -262,7 +301,7 @@ public class InheratanceMap {
     public class Method extends Node {
         private final Bounce bounce;
         private final Set<Method> bouncers = new HashSet<>();
-        private Method override;
+        private Set<Method> overrides = new HashSet<>();
 
         Method(Class owner, MethodNode node, boolean lambda) {
             super(owner, node.name, node.desc, node.access);
@@ -323,8 +362,8 @@ public class InheratanceMap {
             return this.bouncers;
         }
 
-        public Method getRoot() {
-            return this.override == null ? this : this.override;
+        public Collection<Method> getRoots() {
+            return this.overrides.isEmpty() ? Arrays.asList(this) : this.overrides;
         }
 
         @SuppressWarnings("unused")

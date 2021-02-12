@@ -29,6 +29,7 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import net.minecraftforge.mappingverifier.InheratanceMap.Node;
 import net.minecraftforge.srgutils.IMappingFile;
 import net.minecraftforge.srgutils.IMappingFile.IClass;
 
@@ -86,9 +87,7 @@ public class UniqueIDs extends SimpleVerifier {
                         } else {
                             InheratanceMap.Class cls = inh.getClass(pts.get(0));
                             InheratanceMap.Method mtd = cls.getMethod(pts.get(1), pts.get(2));
-                            InheratanceMap.Method root = mtd.getRoot();
-                            String key = root.owner.name +'/' + root.name + root.desc;
-                            methods.put(key, methods.computeIfAbsent(key, k -> 0) + 1);
+                            mtd.getRoots().forEach(root -> methods.put(root.getKey(), methods.computeIfAbsent(root.getKey(), k -> 0) + 1));
                         }
                     });
                 }
@@ -96,6 +95,37 @@ public class UniqueIDs extends SimpleVerifier {
             });
             return false;
         }).reduce(true, (a,b)-> a && b);
+    }
+
+    private void merge(Set<String> methods, InheratanceMap inh) {
+        Map<String, String> chain = new HashMap<>();
+        Set<String> roots = new HashSet<>();
+        inh.getRead().forEach(cls -> {
+            cls.methods.values().stream().filter(mtd -> mtd.getRoots().size() > 1).forEach(mtd -> {
+                List<String> overrides = mtd.getRoots().stream().map(Node::getKey).distinct().collect(Collectors.toList());
+                String root = null;
+                for (String o : overrides) {
+                    if (roots.contains(o)) {
+                        overrides.remove(o);
+                        root = o;
+                        break;
+                    }
+                }
+                if (root == null)
+                    root = overrides.remove(0);
+                roots.add(root);
+                for (String o : overrides)
+                    chain.put(o, root);
+            });
+        });
+        Set<String> ret = new HashSet<>();
+        for (String mtd : methods) {
+            while (chain.containsKey(mtd))
+                mtd = chain.get(mtd);
+            ret.add(mtd);
+        }
+        methods.clear();
+        methods.addAll(ret);
     }
 
     private boolean different(String id, Set<List<String>> entries, InheratanceMap inh) {
@@ -108,15 +138,16 @@ public class UniqueIDs extends SimpleVerifier {
         if (entries.iterator().next().size() == 2) // Only Fields
             return true; //More then one field? Thats bad
 
-        List<InheratanceMap.Method> roots = new ArrayList<>();
+        Set<String> roots = new HashSet<>();
         // Only Methods
         for (List<String> pts : entries) {
             InheratanceMap.Class cls = inh.getClass(pts.get(0));
             InheratanceMap.Method mtd = cls.getMethod(pts.get(1), pts.get(2));
-            InheratanceMap.Method root = mtd.getRoot();
-            if (!roots.contains(root))
-                roots.add(root);
+            mtd.getRoots().forEach(root -> roots.add(root.getKey()));
         }
+
+        if (roots.size() > 1)
+            merge(roots, inh);
 
         return roots.size() > 1;
     }
