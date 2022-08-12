@@ -378,11 +378,10 @@ public class InheratanceMap {
                         roots = roots.stream().map(Method::getRoots).flatMap(Collection::stream).collect(Collectors.toSet());
                     }
                 }
-                if (resolveNested) {
+                if (resolveNested)
                     this.roots = roots;
-                } else {
+                else
                     return roots;
-                }
             }
             return roots;
         }
