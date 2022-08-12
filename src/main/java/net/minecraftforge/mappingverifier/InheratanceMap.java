@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.objectweb.asm.ClassReader;
@@ -141,7 +142,7 @@ public class InheratanceMap {
             for (Class parent : cls.getStack()) {
                 Method pmtd = parent.getMethod(mtd.name, mtd.desc);
                 if (pmtd != null && canBeOverriden.test(pmtd)) {
-                    mtd.overrides.addAll(pmtd.getRoots());
+                    mtd.overrides.addAll(pmtd.getRoots(false));
                     break;
                 }
             }
@@ -152,7 +153,6 @@ public class InheratanceMap {
                 for (Method bounce : mtd.bouncers) {
                     if (!bounce.overrides.isEmpty()) {
                         mtd.overrides.addAll(bounce.overrides);
-                        break;
                     }
                 }
             }
@@ -302,6 +302,7 @@ public class InheratanceMap {
         private final Bounce bounce;
         private final Set<Method> bouncers = new HashSet<>();
         private Set<Method> overrides = new HashSet<>();
+        private Collection<Method> roots;
 
         Method(Class owner, MethodNode node, boolean lambda) {
             super(owner, node.name, node.desc, node.access);
@@ -363,7 +364,26 @@ public class InheratanceMap {
         }
 
         public Collection<Method> getRoots() {
-            return this.overrides.isEmpty() ? Arrays.asList(this) : this.overrides;
+            return getRoots(true);
+        }
+
+        private Collection<Method> getRoots(boolean resolveNested) {
+            if (roots == null) {
+                Collection<InheratanceMap.Method> roots;
+                if (this.overrides.isEmpty()) {
+                    roots = Arrays.asList(this);
+                } else {
+                    roots = this.overrides;
+                    while (resolveNested && roots.stream().anyMatch((mtd) -> !mtd.overrides.isEmpty())) {
+                        roots = roots.stream().map(Method::getRoots).flatMap(Collection::stream).collect(Collectors.toSet());
+                    }
+                }
+                if (resolveNested)
+                    this.roots = roots;
+                else
+                    return roots;
+            }
+            return roots;
         }
 
         @SuppressWarnings("unused")
