@@ -53,9 +53,9 @@ repositories {
 }
 
 dependencies {
-    implementation 'org.ow2.asm:asm:9.0'
-    implementation 'org.ow2.asm:asm-tree:9.0'
-    implementation 'org.ow2.asm:asm-util:9.0'
+    implementation 'org.ow2.asm:asm:9.3'
+    implementation 'org.ow2.asm:asm-tree:9.3'
+    implementation 'org.ow2.asm:asm-util:9.3'
     implementation 'net.sf.jopt-simple:jopt-simple:5.0.4'
 	//Because tons of projects all paarsing SRG files is annoying
 	implementation 'net.minecraftforge:srgutils:0.4.+'
