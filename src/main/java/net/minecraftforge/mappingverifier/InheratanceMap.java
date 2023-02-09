@@ -56,6 +56,8 @@ public class InheratanceMap {
 
     private Map<String, Class> classes = new HashMap<>();
     private Map<String, ClassNode> nodes = new HashMap<>();
+    private Map<String, Set<Method>> bouncers = new HashMap<>();
+    private Map<String, Set<Method>> toResolveBouncers = new HashMap<>();
 
     public void processClass(InputStream data) throws IOException {
         ClassNode node = new ClassNode();
@@ -89,18 +91,43 @@ public class InheratanceMap {
 
         for (MethodNode n : node.methods)
             cls.methods.put(n.name + n.desc, new Method(cls, n, lambdas.contains(node.name + '/' + n.name + n.desc)));
-
+        
         for (Method m : cls.methods.values()) {
             if (m.isBouncer()) {
-                Method target = cls.getMethod(m.bounce.name, m.bounce.desc);
-                if (target != null)
-                    target.bouncers.add(m);
+                if (cls.name.equals(m.bounce.owner)) {
+                    Method target = cls.getMethod(m.bounce.name, m.bounce.desc);
+                    if (target != null)
+                        target.bouncers.add(m);
+                } else if (classes.containsKey(m.bounce.owner)) {
+                    addBouncer(classes.get(m.bounce.owner), m);
+                } else {
+                    bouncers.computeIfAbsent(m.bounce.owner, (name) -> new HashSet<>()).add(m);
+                }
             }
         }
+        
+        for (Method m : bouncers.getOrDefault(cls.name, new HashSet<>())) {
+            addBouncer(cls, m);
+        }
+        bouncers.remove(cls.name);
 
         this.nodes.put(node.name, node);
     }
 
+    private void addBouncer(Class cls, Method m) {
+        Class parent;
+        for (parent = cls; parent != null && parent.wasRead(); parent = parent.getParent()) {
+            Method target = parent.getMethod(m.bounce.name, m.bounce.desc);
+            if (target != null) {
+                target.bouncers.add(m);
+                return;
+            }
+        }
+        
+        if (parent != null) {
+            bouncers.computeIfAbsent(parent.name, (name) -> new HashSet<>()).add(m);
+        }
+    }
 
     private Handle getLambdaTarget(InvokeDynamicInsnNode idn) {
         if (LAMBDA_METAFACTORY.equals(idn.bsm)    && idn.bsmArgs != null && idn.bsmArgs.length == 3 && idn.bsmArgs[1] instanceof Handle)
@@ -153,7 +180,15 @@ public class InheratanceMap {
                 for (Method bounce : mtd.bouncers) {
                     if (!bounce.overrides.isEmpty()) {
                         mtd.overrides.addAll(bounce.overrides);
+                    } else if (!bounce.owner.resolved && bounce.owner != cls) {
+                        toResolveBouncers.computeIfAbsent(bounce.getKey(), (name) -> new HashSet<>()).add(mtd);
                     }
+                }
+            }
+            
+            for (Method bounce : toResolveBouncers.getOrDefault(mtd.getKey(), new HashSet<>())) {
+                if (!mtd.overrides.isEmpty()) {
+                    bounce.overrides.addAll(mtd.overrides);
                 }
             }
         }
@@ -346,7 +381,7 @@ public class InheratanceMap {
                             }
 
                             MethodInsnNode mtd = (MethodInsnNode)end;
-                            if (end != null && mtd.owner.equals(owner.name) && Type.getArgumentsAndReturnSizes(node.desc) == Type.getArgumentsAndReturnSizes(mtd.desc))
+                            if (end != null && Type.getArgumentsAndReturnSizes(node.desc) == Type.getArgumentsAndReturnSizes(mtd.desc))
                                 bounce = new Bounce(mtd.owner, mtd.name, mtd.desc);
                         }
                     }
@@ -368,7 +403,7 @@ public class InheratanceMap {
         }
 
         private Collection<Method> getRoots(boolean resolveNested) {
-            if (roots == null) {
+            if (roots == null || !resolveNested) {
                 Collection<InheratanceMap.Method> roots;
                 if (this.overrides.isEmpty()) {
                     roots = Arrays.asList(this);
