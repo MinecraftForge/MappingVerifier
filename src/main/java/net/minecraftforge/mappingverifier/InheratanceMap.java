@@ -98,10 +98,12 @@ public class InheratanceMap {
                     Method target = cls.getMethod(m.bounce.name, m.bounce.desc);
                     if (target != null)
                         target.bouncers.add(m);
-                } else if (classes.containsKey(m.bounce.owner)) {
-                    addBouncer(classes.get(m.bounce.owner), m);
-                } else {
-                    bouncers.computeIfAbsent(m.bounce.owner, (name) -> new HashSet<>()).add(m);
+                } else if (cls.getParent() != null && cls.getParent().name.equals(m.bounce.owner)) {
+                    if (classes.containsKey(m.bounce.owner)) {
+                        addBouncer(classes.get(m.bounce.owner), m);
+                    } else {
+                        bouncers.computeIfAbsent(m.bounce.owner, (name) -> new HashSet<>()).add(m);
+                    }
                 }
             }
         }
