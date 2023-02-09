@@ -91,7 +91,7 @@ public class InheratanceMap {
 
         for (MethodNode n : node.methods)
             cls.methods.put(n.name + n.desc, new Method(cls, n, lambdas.contains(node.name + '/' + n.name + n.desc)));
-        
+
         for (Method m : cls.methods.values()) {
             if (m.isBouncer()) {
                 if (cls.name.equals(m.bounce.owner)) {
