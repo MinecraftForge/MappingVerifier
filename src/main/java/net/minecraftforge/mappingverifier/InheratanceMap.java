@@ -180,10 +180,12 @@ public class InheratanceMap {
         for (Method mtd : cls.methods.values()) {
             if (mtd.overrides.isEmpty() && !mtd.bouncers.isEmpty() && canOverride.test(mtd)) {
                 for (Method bounce : mtd.bouncers) {
-                    if (!bounce.overrides.isEmpty()) {
-                        mtd.overrides.addAll(bounce.overrides);
-                    } else if (!bounce.owner.resolved && bounce.owner != cls) {
-                        toResolveBouncers.computeIfAbsent(bounce.getKey(), (name) -> new HashSet<>()).add(mtd);
+                    if (!bounce.owner.getStack().contains(cls) || !(mtd.name + mtd.desc).equals(bounce.name + bounce.desc)) {
+                        if (!bounce.overrides.isEmpty()) {
+                            mtd.overrides.addAll(bounce.overrides);
+                        } else if (!bounce.owner.resolved && bounce.owner != cls) {
+                            toResolveBouncers.computeIfAbsent(bounce.getKey(), (name) -> new HashSet<>()).add(mtd);
+                        }
                     }
                 }
             }
