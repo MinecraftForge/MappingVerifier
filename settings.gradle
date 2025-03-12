@@ -1,7 +1,21 @@
-pluginManagement {
-    repositories {
-        gradlePluginPortal()
-        maven { url = 'https://maven.minecraftforge.net/' }
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.9.0'
+}
+
+rootProject.name = 'mapping-verifier'
+
+dependencyResolutionManagement {
+    versionCatalogs {
+        libs {
+            version('asm', '9.3')
+            library('asm',      'org.ow2.asm', 'asm'     ).versionRef('asm')
+            library('asm-tree', 'org.ow2.asm', 'asm-tree').versionRef('asm')
+            library('asm-util', 'org.ow2.asm', 'asm-util').versionRef('asm')
+            bundle('asm', ['asm', 'asm-tree', 'asm-util'])
+
+            library('jopt', 'net.sf.jopt-simple', 'jopt-simple').version('5.0.4')
+
+            library('srgutils', 'net.minecraftforge', 'srgutils').version('0.4.15')
+        }
     }
 }
-rootProject.name = 'mapping-verifier'
