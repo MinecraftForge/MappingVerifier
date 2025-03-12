@@ -7,7 +7,7 @@ rootProject.name = 'mapping-verifier'
 dependencyResolutionManagement {
     versionCatalogs {
         libs {
-            version('asm', '9.3')
+            version('asm', '9.7.1')
             library('asm',      'org.ow2.asm', 'asm'     ).versionRef('asm')
             library('asm-tree', 'org.ow2.asm', 'asm-tree').versionRef('asm')
             library('asm-util', 'org.ow2.asm', 'asm-util').versionRef('asm')
@@ -15,7 +15,7 @@ dependencyResolutionManagement {
 
             library('jopt', 'net.sf.jopt-simple', 'jopt-simple').version('5.0.4')
 
-            library('srgutils', 'net.minecraftforge', 'srgutils').version('0.4.15')
+            library('srgutils', 'net.minecraftforge', 'srgutils').version('0.5.11')
         }
     }
 }
