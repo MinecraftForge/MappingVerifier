@@ -1,20 +1,6 @@
 /*
- * Mapping Verifier
- * Copyright (c) 2016-2020.
- *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation version 2.1
- * of the License.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ * Copyright (c) Forge Development LLC
+ * SPDX-License-Identifier: LGPL-2.1-only
  */
 package net.minecraftforge.mappingverifier;
 
@@ -22,12 +8,14 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 import net.minecraftforge.srgutils.IMappingFile;
@@ -39,7 +27,6 @@ public class MappingVerifier {
         put("overridenames", OverrideNames::new);
         put("uniqueids", UniqueIDs::new);
     }};
-
 
     private IMappingFile map = null;
     private InheratanceMap inh = new InheratanceMap();
@@ -88,22 +75,37 @@ public class MappingVerifier {
         this.map = IMappingFile.load(mapStream);
     }
 
-    public void setMap(IMappingFile map)
-    {
+    public void setMap(IMappingFile map) {
         this.map = map;
     }
 
+    public void loadLibrary(File input) throws IOException {
+        loadJar(input, false);
+    }
+
     public void loadJar(File input) throws IOException {
+        loadJar(input, true);
+    }
+
+    private void loadJar(File input, boolean owned) throws IOException {
         try (ZipFile zip = new ZipFile(input)) {
-            zip.stream().filter(e -> !e.isDirectory() && e.getName().endsWith(".class") && !e.getName().startsWith("META-INF/")) //Classes Only, No support for multi-release jars.
-            .forEach(e -> {
+            Enumeration<? extends ZipEntry> itr = zip.entries();
+            while (itr.hasMoreElements()) {
+                ZipEntry e = itr.nextElement();
+                if (e.isDirectory() ||
+                    !e.getName().endsWith(".class") || // Classes Only
+                    e.getName().startsWith("META-INF/") // No Multi-Release support
+                ) {
+                    continue;
+                }
+
                 try {
                     Main.LOG.info("Loading: " + e.getName());
-                    inh.processClass(zip.getInputStream(e));
+                    inh.processClass(zip.getInputStream(e), owned);
                 } catch (IOException e1) {
                     e1.printStackTrace();
                 }
-            });
+            }
         }
     }
 }

@@ -1,20 +1,6 @@
 /*
- * Mapping Verifier
- * Copyright (c) 2016-2020.
- *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation version 2.1
- * of the License.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ * Copyright (c) Forge Development LLC
+ * SPDX-License-Identifier: LGPL-2.1-only
  */
 package net.minecraftforge.mappingverifier;
 
@@ -24,12 +10,15 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -58,8 +47,10 @@ public class InheratanceMap {
     private Map<String, ClassNode> nodes = new HashMap<>();
     private Map<String, Set<Method>> bouncers = new HashMap<>();
     private Map<String, Set<Method>> toResolveBouncers = new HashMap<>();
+    private Set<Class> owned = new TreeSet<>();
+    private Set<Class> ownedView = Collections.unmodifiableSet(owned);
 
-    public void processClass(InputStream data) throws IOException {
+    public void processClass(InputStream data, boolean owned) throws IOException {
         ClassNode node = new ClassNode();
         ClassReader reader = new ClassReader(data);
         reader.accept(node, 0);
@@ -67,7 +58,11 @@ public class InheratanceMap {
         Class cls = getClass(node.name);
         cls.parent = getClass(node.superName);
         cls.wasRead = true;
+        cls.owned = owned;
         cls.access = node.access;
+
+        if (owned)
+            this.owned.add(cls);
 
         for (String intf : node.interfaces)
             cls.interfaces.add(getClass(intf));
@@ -107,7 +102,7 @@ public class InheratanceMap {
                 }
             }
         }
-        
+
         for (Method m : bouncers.getOrDefault(cls.name, new HashSet<>())) {
             addBouncer(cls, m);
         }
@@ -125,7 +120,7 @@ public class InheratanceMap {
                 return;
             }
         }
-        
+
         if (parent != null) {
             bouncers.computeIfAbsent(parent.name, (name) -> new HashSet<>()).add(m);
         }
@@ -149,6 +144,10 @@ public class InheratanceMap {
 
     public Stream<Class> getRead() {
         return classes.values().stream().filter(e -> e.wasRead);
+    }
+
+    public Collection<Class> getOwned() {
+        return this.ownedView;
     }
 
     public void resolve() {
@@ -189,7 +188,7 @@ public class InheratanceMap {
                     }
                 }
             }
-            
+
             for (Method bounce : toResolveBouncers.getOrDefault(mtd.getKey(), new HashSet<>())) {
                 if (!mtd.overrides.isEmpty()) {
                     bounce.overrides.addAll(mtd.overrides);
@@ -222,15 +221,19 @@ public class InheratanceMap {
         cls.resolved = true;
     }
 
-    public static class Class {
+    public static class Class implements Comparable<Class> {
         private boolean resolved = false;
         private boolean wasRead = false;
+        private boolean owned = false;
         private int access = 0;
         private Class parent;
         public final String name;
-        public final Map<String, Field> fields = new HashMap<>();
-        public final Map<String, Method> methods = new HashMap<>();
-        public final List<Class> interfaces = new ArrayList<>();
+        private final Map<String, Field> fields = new TreeMap<>();
+        private final Map<String, Field> fieldsView = Collections.unmodifiableMap(fields);
+        private final Map<String, Method> methods = new TreeMap<>();
+        private final Map<String, Method> methodsView = Collections.unmodifiableMap(methods);
+        private final List<Class> interfaces = new ArrayList<>();
+        private final List<Class> interfacesView = Collections.unmodifiableList(interfaces);
         private List<Class> stack = null;
 
         public Class(String name) {
@@ -239,6 +242,10 @@ public class InheratanceMap {
 
         public boolean wasRead() {
             return wasRead;
+        }
+
+        public boolean isOwned() {
+            return owned;
         }
 
         public int getAccess() {
@@ -253,9 +260,26 @@ public class InheratanceMap {
             return parent;
         }
 
+        public Map<String, Field> getFields() {
+            return this.fieldsView;
+        }
+
+        public Map<String, Method> getMethods() {
+            return this.methodsView;
+        }
+
+        public Collection<Class> getInterfaces() {
+            return this.interfacesView;
+        }
+
         @Override
         public String toString() {
             return this.name + " [" + fields.size() + ", " + methods.size() + "]";
+        }
+
+        @Override
+        public int hashCode() {
+            return this.name.hashCode();
         }
 
         public Field getField(String name) {
@@ -291,9 +315,15 @@ public class InheratanceMap {
             }
             return stack;
         }
+
+        @Override
+        public int compareTo(Class o) {
+            if (o == null) return -1;
+            return this.name.compareTo(o.name);
+        }
     }
 
-    public static class Node {
+    public static class Node implements Comparable<Node> {
         public final Class owner;
         public final String name;
         public final String desc;
@@ -328,6 +358,16 @@ public class InheratanceMap {
         @Override
         public String toString() {
             return Access.get(this.access).name() + " " + this.owner.name + "/" + this.name + this.desc;
+        }
+
+        @Override
+        public int compareTo(Node o) {
+            if (o == null) return -1;
+            int ret = this.owner.compareTo(o.owner);
+            if (ret != 0) return ret;
+            ret = this.name.compareTo(o.name);
+            if (ret != 0) return ret;
+            return this.desc.compareTo(o.desc);
         }
     }
 

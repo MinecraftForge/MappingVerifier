@@ -1,34 +1,23 @@
 /*
- * Mapping Verifier
- * Copyright (c) 2016-2020.
- *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation version 2.1
- * of the License.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ * Copyright (c) Forge Development LLC
+ * SPDX-License-Identifier: LGPL-2.1-only
  */
 package net.minecraftforge.mappingverifier;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
+import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 import net.minecraftforge.mappingverifier.InheratanceMap.Class;
 import net.minecraftforge.mappingverifier.InheratanceMap.Node;
@@ -43,26 +32,28 @@ public class AccessLevels extends SimpleVerifier {
     public boolean process() {
         InheratanceMap inh = verifier.getInheratance();
         IMappingFile map = verifier.getMappings();
-        return inh.getRead()
-        .sorted((o1, o2) -> o1.name.compareTo(o2.name))
-        .map(cls -> {
+
+        boolean success = true;
+        for (Class cls : inh.getOwned()) {
             Main.LOG.fine("  Processing: " + map.remapClass(cls.name));
             ClassNode node = inh.getNode(cls.name);
 
             if (node == null) {
                 error("  Missing node: " + cls.name);
-                return false; //Does this ever happen?
+                success = false;
+                continue; //Does this ever happen?
             }
 
             Set<String> warned = new HashSet<>();
 
             String newCls = map.remapClass(cls.name);
             String pkg = packageName(newCls);
-            boolean success = node.methods.stream().sequential()
-            .sorted((o1, o2) -> o1.name.equals(o2.name) ? o1.desc.compareTo(o2.desc) : o1.name.compareTo(o2.name))
-            .map(mt -> {
-                boolean inner_success = true;
 
+            List<MethodNode> methods = node.methods.stream().sequential()
+                .sorted((o1, o2) -> o1.name.equals(o2.name) ? o1.desc.compareTo(o2.desc) : o1.name.compareTo(o2.name))
+                .collect(Collectors.toList());
+
+            for (MethodNode mt : methods) {
                 for (AbstractInsnNode isn : mt.instructions.toArray()) {
                     if (isn instanceof FieldInsnNode) {
                         FieldInsnNode field = (FieldInsnNode)isn;
@@ -93,7 +84,7 @@ public class AccessLevels extends SimpleVerifier {
                         boolean isPackage = pkg.equals(packageName(newOwner));
                         boolean isSubclass = cls.getStack().contains(target.owner);
 
-                        inner_success &= canAccess(newCls, newOwner + "/" + newField, target.access, isPackage, isSubclass, isSelf, warned);
+                        success &= canAccess(newCls, newOwner + "/" + newField, target.access, isPackage, isSubclass, isSelf, warned);
                     } else if (isn instanceof MethodInsnNode) {
                         MethodInsnNode method = (MethodInsnNode)isn;
 
@@ -123,7 +114,7 @@ public class AccessLevels extends SimpleVerifier {
 
                         boolean isPackage = pkg.equals(packageName(newOwner));
                         boolean isSubclass = cls.getStack().contains(target.owner);
-                        inner_success &= canAccess(newCls, newOwner + "/" + newMethod + newDesc, target.access, isPackage, isSubclass, isSelf, warned);
+                        success &= canAccess(newCls, newOwner + "/" + newMethod + newDesc, target.access, isPackage, isSubclass, isSelf, warned);
                     } else if (isn instanceof TypeInsnNode) {
                         String obfed = ((TypeInsnNode)isn).desc;
                         boolean isSelf = obfed.equals(node.name);
@@ -138,15 +129,13 @@ public class AccessLevels extends SimpleVerifier {
                         String newOwner = map.remapClass(obfed);
                         boolean isPackage = pkg.equals(packageName(newOwner));
                         boolean isSubclass = cls.getStack().contains(inh.getClass(obfed));
-                        inner_success &= canAccess(newCls, newOwner, owner.getAccess(), isPackage, isSubclass, isSelf, warned);
+                        success &= canAccess(newCls, newOwner, owner.getAccess(), isPackage, isSubclass, isSelf, warned);
                     }
                 }
+            }
+        }
 
-                return inner_success;
-            }).reduce(true, (a,b) -> a && b);
-
-            return success;
-        }).reduce(true, (a,b) -> a && b);
+        return success;
     }
 
     private String packageName(String clsName) {
