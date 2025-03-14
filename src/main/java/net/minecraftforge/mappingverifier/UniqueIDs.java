@@ -32,6 +32,7 @@ public class UniqueIDs extends SimpleVerifier {
 
     @Override
     public boolean process() {
+        Main.LOG.info("UniqueIDs:");
         InheratanceMap inh = verifier.getInheratance();
         IMappingFile map = verifier.getMappings();
         Map<Integer, Set<String>> claimed = new TreeMap<>();
@@ -49,13 +50,13 @@ public class UniqueIDs extends SimpleVerifier {
             IClass info = map.getClass(cls.name);
 
             for (Field field : cls.getFields().values()) {
-                String mapped = info.remapField(field.name);
+                String mapped = mapField(info, field.name);
                 if (mapped.startsWith("field_") || mapped.startsWith("f_"))
                     gather.accept(new String[] { mapped, cls.name, field.name });
             }
 
             for (Method method : cls.getMethods().values()) {
-                String mapped = info.remapMethod(method.name, method.desc);
+                String mapped = mapMethod(info, method.name, method.desc);
                 if (mapped.startsWith("func_") || mapped.startsWith("m_"))
                     gather.accept(new String[] { mapped, cls.name, method.name, method.desc });
             }

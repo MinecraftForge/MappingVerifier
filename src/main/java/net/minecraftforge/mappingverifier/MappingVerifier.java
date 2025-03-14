@@ -92,15 +92,16 @@ public class MappingVerifier {
             Enumeration<? extends ZipEntry> itr = zip.entries();
             while (itr.hasMoreElements()) {
                 ZipEntry e = itr.nextElement();
-                if (e.isDirectory() ||
-                    !e.getName().endsWith(".class") || // Classes Only
-                    e.getName().startsWith("META-INF/") // No Multi-Release support
+                if (e.isDirectory()
+                   || !e.getName().endsWith(".class") // Classes Only
+                   || e.getName().startsWith("META-INF/") // No Multi-Release support
+                   || e.getName().equals("module-info.class")
                 ) {
                     continue;
                 }
 
                 try {
-                    Main.LOG.info("Loading: " + e.getName());
+                    Main.LOG.finest("Loading: " + e.getName());
                     inh.processClass(zip.getInputStream(e), owned);
                 } catch (IOException e1) {
                     e1.printStackTrace();

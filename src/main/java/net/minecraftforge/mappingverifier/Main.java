@@ -7,6 +7,9 @@ package net.minecraftforge.mappingverifier;
 import java.io.File;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.logging.FileHandler;
 import java.util.logging.Formatter;
@@ -32,7 +35,9 @@ public class Main {
         OptionSpec<File> jarArg = parser.accepts("jar").withRequiredArg().ofType(File.class).required();
         OptionSpec<File> mapArg = parser.accepts("map").withRequiredArg().ofType(File.class).required();
         OptionSpec<String> logArg = parser.accepts("log").withRequiredArg().ofType(String.class);
-        parser.accepts("verbose");
+        OptionSpec<File> libsArg = parser.accepts("libs").withRequiredArg().ofType(File.class);
+        OptionSpec<File> libArg = parser.accepts("lib").withRequiredArg().ofType(File.class);
+        OptionSpec<Void> verboseArg = parser.accepts("verbose");
 
         try {
             OptionSet options = parser.parse(args);
@@ -49,7 +54,8 @@ public class Main {
             File mapFile = mapArg.value(options);
             String logFile = logArg.value(options);
             //String snapVersion = options.has(snapArg) ? snapArg.value(options) : null;
-            boolean verbose = options.has("verbose");
+            File libsFile = options.has(libsArg) ? libsArg.value(options) : null;
+            boolean verbose = options.has(verboseArg);
 
             Main.LOG.setUseParentHandlers(false);
             Main.LOG.setLevel(Level.ALL);
@@ -73,8 +79,8 @@ public class Main {
                         }
                         return sb.toString();
                     }
-
                 });
+                //filehandler.setLevel(Level.WARNING);
                 Main.LOG.addHandler(filehandler);
             }
             Main.LOG.addHandler(new Handler() {
@@ -91,6 +97,7 @@ public class Main {
             log("Jar:      " + jarFile);
             log("Map:      " + mapFile);
             log("Log:      " + logFile);
+            log("Libs:     " + libsFile);
 
             try {
                 MappingVerifier mv = new MappingVerifier();
@@ -98,7 +105,30 @@ public class Main {
                 mv.addDefaultTasks();
                 mv.loadMap(mapFile);
 
-                mv.loadJar(jarFile); //TODO: Add full classpath so we can check all classes including JVM?
+                List<File> libs = new ArrayList<>();
+                if (libsFile != null) {
+                    List<String> lines = Files.readAllLines(libsFile.toPath());
+                    for (String line : lines) {
+                        int idx = line.indexOf('#');
+                        if (idx == 0)
+                            continue;
+                        if (idx != -1)
+                            line = line.substring(0, idx - 1).trim();
+                        if (line.isEmpty())
+                            continue;
+                        if (line.startsWith("-e="))
+                            line = line.substring(3);
+                        libs.add(new File(line));
+                    }
+                }
+                libs.addAll(options.valuesOf(libArg));
+
+                for (File lib : libs) {
+                    log("Lib:      " + lib);
+                    mv.loadLibrary(lib);
+                }
+
+                mv.loadJar(jarFile);
 
                 if (!mv.verify()) {
                     for (IVerifier task : mv.getTasks()) {

@@ -6,7 +6,7 @@ package net.minecraftforge.mappingverifier;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayDeque;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -21,8 +21,6 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
@@ -37,15 +35,15 @@ import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
-import static org.objectweb.asm.Opcodes.*;
-
 public class InheratanceMap {
     private static final Handle LAMBDA_METAFACTORY = new Handle(Opcodes.H_INVOKESTATIC, "java/lang/invoke/LambdaMetafactory", "metafactory",       "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;", false);
     private static final Handle LAMBDA_ALTMETAFACTORY = new Handle(Opcodes.H_INVOKESTATIC, "java/lang/invoke/LambdaMetafactory", "altMetafactory", "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;", false);
 
     private Map<String, Class> classes = new HashMap<>();
     private Map<String, ClassNode> nodes = new HashMap<>();
+    @Deprecated // remove building Bounced -> Bouncer list
     private Map<String, Set<Method>> bouncers = new HashMap<>();
+    @Deprecated // remove building Bounced -> Bouncer list
     private Map<String, Set<Method>> toResolveBouncers = new HashMap<>();
     private Set<Class> owned = new TreeSet<>();
     private Set<Class> ownedView = Collections.unmodifiableSet(owned);
@@ -70,20 +68,8 @@ public class InheratanceMap {
         for (FieldNode n : node.fields)
             cls.fields.put(n.name, new Field(cls, n));
 
-
         //Gather Lambda methods so we can skip them in bouncers?
-        Set<String> lambdas = new HashSet<>();
-        for (MethodNode mtd : node.methods) {
-            for (AbstractInsnNode asn : (Iterable<AbstractInsnNode>)() -> mtd.instructions.iterator()) {
-                if (asn instanceof InvokeDynamicInsnNode) {
-                    Handle target = getLambdaTarget((InvokeDynamicInsnNode)asn);
-                    if (target != null) {
-                        lambdas.add(target.getOwner() + '/' + target.getName() + target.getDesc());
-                    }
-                }
-            }
-        }
-
+        Set<String> lambdas = findLambdas(node);
         for (MethodNode n : node.methods)
             cls.methods.put(n.name + n.desc, new Method(cls, n, lambdas.contains(node.name + '/' + n.name + n.desc)));
 
@@ -103,14 +89,43 @@ public class InheratanceMap {
             }
         }
 
-        for (Method m : bouncers.getOrDefault(cls.name, new HashSet<>())) {
+        for (Method m : bouncers.getOrDefault(cls.name, Collections.emptySet())) {
             addBouncer(cls, m);
         }
         bouncers.remove(cls.name);
 
-        this.nodes.put(node.name, node);
+        if (owned)
+            this.nodes.put(node.name, node);
     }
 
+    private void loadFromClasspath(Class cls) {
+        String path = cls.name.replace('.', '/') + ".class";
+        try (InputStream stream = this.getClass().getClassLoader().getResourceAsStream(path)) {
+            if (stream == null)
+                Main.LOG.warning("Class not found: " + cls.name);
+            else
+                processClass(stream, false);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static Set<String> findLambdas(ClassNode node) {
+        Set<String> lambdas = new HashSet<>();
+        for (MethodNode mtd : node.methods) {
+            for (AbstractInsnNode asn : (Iterable<AbstractInsnNode>)() -> mtd.instructions.iterator()) {
+                if (asn instanceof InvokeDynamicInsnNode) {
+                    Handle target = getLambdaTarget((InvokeDynamicInsnNode)asn);
+                    if (target != null) {
+                        lambdas.add(target.getOwner() + '/' + target.getName() + target.getDesc());
+                    }
+                }
+            }
+        }
+        return lambdas;
+    }
+
+    @Deprecated // remove building Bounced -> Bouncer list
     private void addBouncer(Class cls, Method m) {
         Class parent;
         for (parent = cls; parent != null && parent.wasRead(); parent = parent.getParent()) {
@@ -126,7 +141,7 @@ public class InheratanceMap {
         }
     }
 
-    private Handle getLambdaTarget(InvokeDynamicInsnNode idn) {
+    private static Handle getLambdaTarget(InvokeDynamicInsnNode idn) {
         if (LAMBDA_METAFACTORY.equals(idn.bsm)    && idn.bsmArgs != null && idn.bsmArgs.length == 3 && idn.bsmArgs[1] instanceof Handle)
             return ((Handle)idn.bsmArgs[1]);
         if (LAMBDA_ALTMETAFACTORY.equals(idn.bsm) && idn.bsmArgs != null && idn.bsmArgs.length == 5 && idn.bsmArgs[1] instanceof Handle)
@@ -135,6 +150,8 @@ public class InheratanceMap {
     }
 
     public Class getClass(String name) {
+        if (name == null)
+            return null;
         return classes.computeIfAbsent(name, k -> new Class(name));
     }
 
@@ -142,21 +159,23 @@ public class InheratanceMap {
         return nodes.get(name);
     }
 
-    public Stream<Class> getRead() {
-        return classes.values().stream().filter(e -> e.wasRead);
-    }
-
     public Collection<Class> getOwned() {
         return this.ownedView;
     }
 
     public void resolve() {
-        classes.values().stream().forEach(this::resolve);
+        getOwned().forEach(this::resolve);
     }
 
     private void resolve(Class cls) {
         if (cls == null || cls.resolved)
             return;
+
+        //if (!cls.isOwned())
+        //    Main.LOG.warning("Resolving: " + cls.name);
+
+        if (!cls.wasRead)
+            loadFromClasspath(cls);
 
         resolve(cls.getParent());
         cls.interfaces.forEach(this::resolve);
@@ -240,6 +259,10 @@ public class InheratanceMap {
             this.name = name;
         }
 
+        public String getName() {
+            return name;
+        }
+
         public boolean wasRead() {
             return wasRead;
         }
@@ -253,7 +276,11 @@ public class InheratanceMap {
         }
 
         public boolean isAbstract() {
-            return (getAccess() & ACC_ABSTRACT) != 0;
+            return Modifier.isAbstract(getAccess());
+        }
+
+        public boolean isInterface() {
+            return Modifier.isInterface(getAccess());
         }
 
         public Class getParent() {
@@ -292,25 +319,17 @@ public class InheratanceMap {
 
         public List<Class> getStack() {
             if (stack == null) {
-                Set<String> visited = new HashSet<>();
-
                 stack = new ArrayList<>();
 
-                Queue<Class> q = new ArrayDeque<>();
-                if (parent != null)
-                    q.add(parent);
+                Queue<Class> q = new UniqueDeque<>();
+                q.add(parent);
                 this.interfaces.forEach(q::add);
 
                 while (!q.isEmpty()) {
                     Class cls = q.poll();
-                    if (!visited.contains(cls.name)) {
-                        stack.add(cls);
-                        visited.add(cls.name);
-                        if (cls.parent != null && !visited.contains(cls.parent.name))
-                            q.add(cls.parent);
-
-                        cls.interfaces.stream().filter(i -> !visited.contains(i.name)).forEach(q::add);
-                    }
+                    stack.add(cls);
+                    q.add(cls.parent);
+                    cls.interfaces.stream().forEach(q::add);
                 }
             }
             return stack;
@@ -343,11 +362,15 @@ public class InheratanceMap {
         }
 
         public boolean isAbstract() {
-            return (getAccess() & ACC_ABSTRACT) != 0;
+            return Modifier.isAbstract(getAccess());
         }
 
         public String getKey() {
-            return this.owner.name + "/" + this.name + this.desc;
+            return this.owner.name + "." + this.name + this.desc;
+        }
+
+        public String getSimple() {
+            return this.name + this.desc;
         }
 
         @Override
@@ -357,7 +380,7 @@ public class InheratanceMap {
 
         @Override
         public String toString() {
-            return Access.get(this.access).name() + " " + this.owner.name + "/" + this.name + this.desc;
+            return /*Modifier.toString(this.access) + " " +*/ this.owner.name + "." + this.name + this.desc;
         }
 
         @Override
@@ -379,6 +402,7 @@ public class InheratanceMap {
 
     public class Method extends Node {
         private final Bounce bounce;
+        @Deprecated // remove building Bounced -> Bouncer list
         private final Set<Method> bouncers = new HashSet<>();
         private Set<Method> overrides = new HashSet<>();
         private Collection<Method> roots;
@@ -386,7 +410,7 @@ public class InheratanceMap {
         Method(Class owner, MethodNode node, boolean lambda) {
             super(owner, node.name, node.desc, node.access);
             Bounce bounce = null;
-            if (!lambda && (node.access & (Opcodes.ACC_SYNTHETIC | Opcodes.ACC_BRIDGE)) != 0 && (node.access & Opcodes.ACC_STATIC) == 0) {
+            if (!lambda && (node.access & (Opcodes.ACC_SYNTHETIC | Opcodes.ACC_BRIDGE)) != 0 && !Modifier.isStatic(node.access)) {
                 AbstractInsnNode start = node.instructions.getFirst();
                 if (start instanceof LabelNode && start.getNext() instanceof LineNumberNode)
                     start = start.getNext().getNext();
@@ -438,12 +462,23 @@ public class InheratanceMap {
             return this.bounce != null;
         }
 
+        public Bounce getBounceTarget() {
+            return this.bounce;
+        }
+
+        @Deprecated // remove building Bounced -> Bouncer list
         public Set<Method> getBouncers() {
             return this.bouncers;
         }
 
         public Collection<Method> getRoots() {
             return getRoots(true);
+        }
+
+        public boolean isInheritable() {
+            // Static, and private methods can shadow/cause compiler errors, but can't override.
+            // init methods can't do anything.
+            return !Modifier.isStatic(access) && !Modifier.isPrivate(access) && !name.startsWith("<");
         }
 
         private Collection<Method> getRoots(boolean resolveNested) {
@@ -465,31 +500,21 @@ public class InheratanceMap {
             return roots;
         }
 
-        @SuppressWarnings("unused")
-        private class Bounce {
-            private final String owner;
-            private final String name;
-            private final String desc;
+        public class Bounce {
+            public final String owner;
+            public final String name;
+            public final String desc;
 
             private Bounce(String owner, String name, String desc) {
                 this.owner = owner;
                 this.name = name;
                 this.desc = desc;
             }
-        }
-    }
 
-    public static enum Access {
-        PRIVATE, DEFAULT, PROTECTED, PUBLIC;
-        public static Access get(int acc) {
-            if ((acc & ACC_PRIVATE)   == ACC_PRIVATE  ) return PRIVATE;
-            if ((acc & ACC_PROTECTED) == ACC_PROTECTED) return PROTECTED;
-            if ((acc & ACC_PUBLIC)    == ACC_PUBLIC   ) return PUBLIC;
-            return DEFAULT;
-        }
-
-        public static boolean isPrivate(int acc) {
-            return get(acc) == PRIVATE;
+            @Override
+            public String toString() {
+                return owner + '.' + name + desc;
+            }
         }
     }
 }
